@@ -104,9 +104,9 @@ struct EntityAttachment {
 // World-space offset of an attachment for a parent facing `parent_yaw_deg`
 // (same yaw convention as physics::wish_dir_from_local: yaw 0 faces -Z).
 inline core::Vec3d attachment_world_offset(const EntityAttachment &a, float parent_yaw_deg) {
-	const double x = a.offset.x;
-	const double y = a.offset.y;
-	const double z = a.offset.z;
+	const auto x = static_cast<double>(a.offset.x);
+	const auto y = static_cast<double>(a.offset.y);
+	const auto z = static_cast<double>(a.offset.z);
 	if (!a.face_offset) {
 		return { x, y, z };
 	}

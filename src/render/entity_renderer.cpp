@@ -372,7 +372,7 @@ void EntityRenderer::sync(const net::ClientSession &client,
 		r.pos = m.position;
 		r.vel = core::Vec3f{ static_cast<float>(m.velocity.x),
 			static_cast<float>(m.velocity.y), static_cast<float>(m.velocity.z) };
-		r.flags = m.on_ground ? kAnimOnGround : std::uint8_t{ 0 };
+		r.flags = m.on_ground ? std::uint8_t{ kAnimOnGround } : std::uint8_t{ 0 };
 		const auto pose = entity_pose(client, r.net_id, camera);
 		r.rot.x = pose ? pose->second : 0.0f;
 		local = r;

@@ -2092,7 +2092,7 @@ TEST_CASE("attach_to: the child follows its parent on the server and the "
 	const auto *link = a.entity_attachment(hat);
 	REQUIRE(link != nullptr);
 	CHECK(link->parent == me);
-	CHECK(link->offset.y == doctest::Approx(1.9f));
+	CHECK(static_cast<double>(link->offset.y) == doctest::Approx(1.9));
 	REQUIRE(link->layer.has_value());
 	CHECK(*link->layer == 1);
 

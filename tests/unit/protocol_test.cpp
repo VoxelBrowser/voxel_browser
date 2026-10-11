@@ -567,7 +567,7 @@ TEST_CASE("S2C_EntityProps decode rejects over-long text and unknown field bits"
 	CHECK_FALSE(S2CEntityProps::decode(buf));
 
 	S2CEntityProps ok;
-	ok.updates.push_back({ static_cast<vb::core::NetId>(1), std::nullopt, std::nullopt, std::nullopt });
+	ok.updates.push_back({ static_cast<vb::core::NetId>(1), std::nullopt, std::nullopt, std::nullopt, std::nullopt });
 	std::vector<std::byte> bytes;
 	ok.encode(bytes);
 	bytes.back() = std::byte{ 0x80 }; // the field mask: an undefined bit

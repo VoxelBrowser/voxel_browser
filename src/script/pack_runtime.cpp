@@ -695,7 +695,9 @@ float parse_text_number(const std::string &context, const char *field,
 		throw sol::error(where + " must be a number");
 	}
 	const double v = obj.as<double>();
-	if (!std::isfinite(v) || v > max || v < min || (min_exclusive && v == min)) {
+	const double lo = static_cast<double>(min);
+	const double hi = static_cast<double>(max);
+	if (!std::isfinite(v) || v > hi || v < lo || (min_exclusive && v == lo)) {
 		throw sol::error(where + " must be in " + (min_exclusive ? "(" : "[") +
 				std::to_string(min) + ", " + std::to_string(max) + "]");
 	}
@@ -2483,7 +2485,7 @@ void PackRuntime::Impl::install_bindings() {
 		}
 		const std::size_t kind_index =
 				static_cast<std::size_t>(kind_it - entity_kinds.begin());
-		ScriptEntity entity{ .kind_index = kind_index, .self = self, .pos = p, .health = std::nullopt, .text = text };
+		ScriptEntity entity{ .kind_index = kind_index, .self = self, .pos = p, .health = std::nullopt, .text = text, .attach = std::nullopt };
 		if (kind_it->max_health) {
 			entity.health = *kind_it->max_health;
 		}

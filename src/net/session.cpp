@@ -1679,7 +1679,8 @@ void ServerSession::update_attachments() {
 		} else if (const replication::EntityState *parent = interest_.get(props.attach->parent)) {
 			ppos = parent->pos;
 			prot = parent->rot;
-			pvel = { parent->vel.x, parent->vel.y, parent->vel.z };
+			pvel = { static_cast<double>(parent->vel.x), static_cast<double>(parent->vel.y),
+				static_cast<double>(parent->vel.z) };
 		} else {
 			orphans.push_back(id);
 			continue;
