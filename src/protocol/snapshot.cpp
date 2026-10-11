@@ -1,6 +1,7 @@
 #include "vb/protocol/snapshot.hpp"
 
 #include "vb/protocol/byte_buffer.hpp"
+#include "visual_layer_codec.hpp"
 
 namespace vb::protocol {
 
@@ -62,6 +63,10 @@ void write_visual_override(ByteWriter &w, const EntityVisualOverride &v) {
 	if (v.through_walls) {
 		w.boolean(*v.through_walls);
 	}
+	w.boolean(v.layers.has_value());
+	if (v.layers) {
+		detail::write_visual_layers(w, *v.layers);
+	}
 }
 
 EntityVisualOverride read_visual_override(ByteReader &r) {
@@ -105,6 +110,9 @@ EntityVisualOverride read_visual_override(ByteReader &r) {
 	}
 	if (r.boolean()) {
 		v.through_walls = r.boolean();
+	}
+	if (r.boolean()) {
+		v.layers = detail::read_visual_layers(r);
 	}
 	return v;
 }
@@ -271,7 +279,8 @@ void S2CEntityProps::encode(std::vector<std::byte> &out) const {
 		w.u32(static_cast<std::uint32_t>(u.net_id));
 		const unsigned mask = (u.text ? unsigned{ kEntityPropText } : 0u) |
 				(u.clip ? unsigned{ kEntityPropClip } : 0u) |
-				(u.attach ? unsigned{ kEntityPropAttach } : 0u);
+				(u.attach ? unsigned{ kEntityPropAttach } : 0u) |
+				(u.visual ? unsigned{ kEntityPropVisual } : 0u);
 		w.u8(static_cast<std::uint8_t>(mask));
 		if (u.text) {
 			w.boolean(u.text->has_value());
@@ -298,6 +307,12 @@ void S2CEntityProps::encode(std::vector<std::byte> &out) const {
 				if (a.layer) {
 					w.i8(*a.layer);
 				}
+			}
+		}
+		if (u.visual) {
+			w.boolean(u.visual->has_value());
+			if (*u.visual) {
+				write_visual_override(w, **u.visual);
 			}
 		}
 	}
@@ -345,6 +360,12 @@ Decoded<S2CEntityProps> S2CEntityProps::decode(std::span<const std::byte> in) {
 					a.layer = r.i8();
 				}
 				*u.attach = a;
+			}
+		}
+		if (mask & kEntityPropVisual) {
+			u.visual.emplace();
+			if (r.boolean()) {
+				*u.visual = read_visual_override(r);
 			}
 		}
 		m.updates.push_back(std::move(u));

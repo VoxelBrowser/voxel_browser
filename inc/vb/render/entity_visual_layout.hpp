@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <numeric>
 #include <optional>
 #include <string>
@@ -115,7 +116,45 @@ inline protocol::EntityVisualDef merge_visual_override(
 	if (over.through_walls) {
 		out.through_walls = *over.through_walls;
 	}
+	if (over.layers) {
+		out.layers = *over.layers;
+	}
 	return out;
+}
+
+// Paper-doll layers (protocol::EntityVisualLayer). A layer is drawn on pose
+// row `row` unless its `rows` mask excludes it (0 = every row).
+inline bool layer_applies_to_row(std::uint8_t rows_mask, int row) {
+	return rows_mask == 0 || (row >= 0 && row < 8 && ((rows_mask >> row) & 1u) != 0);
+}
+
+// A layer sheet must be exactly the base sheet's size: it is sampled with the
+// base frame's source rectangle, so any other size would misalign.
+inline bool layer_sheet_matches(int base_width, int base_height, int layer_width,
+		int layer_height) {
+	return base_width == layer_width && base_height == layer_height;
+}
+
+// Draw order of a layered billboard on pose row `row`: indices into
+// `layers` with -1 standing for the base sheet -- `below` layers first (in
+// list order), then the base, then the rest. Layers that don't apply to the
+// row are left out.
+inline std::vector<int> layer_draw_order(
+		const std::vector<protocol::EntityVisualLayer> &layers, int row) {
+	std::vector<int> order;
+	order.reserve(layers.size() + 1);
+	for (std::size_t i = 0; i < layers.size(); ++i) {
+		if (layers[i].below && layer_applies_to_row(layers[i].rows, row)) {
+			order.push_back(static_cast<int>(i));
+		}
+	}
+	order.push_back(-1);
+	for (std::size_t i = 0; i < layers.size(); ++i) {
+		if (!layers[i].below && layer_applies_to_row(layers[i].rows, row)) {
+			order.push_back(static_cast<int>(i));
+		}
+	}
+	return order;
 }
 
 // Exact-name lookup; falls back to the first declared clip if `name` isn't

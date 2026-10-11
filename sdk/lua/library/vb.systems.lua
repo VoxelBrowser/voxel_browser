@@ -144,6 +144,15 @@ vb.render = {}
 ---@param def FogParams
 function vb.render.set_fog(def) end
 
+---@vb context load
+---Server pack VM only. Allows (default) or forbids the client's third-person camera (F5), which lets a player see
+---their own appearance (`player:set_visual_override`).
+---```lua
+---vb.render.set_third_person(false)
+---```
+---@param allowed boolean
+function vb.render.set_third_person(allowed) end
+
 ---@class vb.config
 vb.config = {}
 

@@ -93,6 +93,14 @@ inline vb::net::HandshakeServerConfig sp_server_config(std::uint64_t seed, int v
 	return c;
 }
 
+// Copies the pack's handshake-visible settings (vb.render.set_third_person)
+// into a server config, as src/server/main.cpp does for a dedicated server.
+inline vb::net::HandshakeServerConfig with_pack_settings(vb::net::HandshakeServerConfig c,
+		const vb::script::PackRuntime &pack_runtime) {
+	c.third_person_allowed = pack_runtime.third_person_allowed();
+	return c;
+}
+
 inline vb::net::HandshakeClientConfig sp_client_config(const std::string &name) {
 	vb::net::HandshakeClientConfig c;
 	c.player_name = name;
@@ -403,7 +411,7 @@ struct Singleplayer {
 																						   pack_runtime.build_worldgen_pipeline(
 																								   vb::worldgen::WorldGenParams{ seed }))),
 																				   pool(generator),
-																				   server(net.server(), sp_server_config(seed, view_distance, auth_config),
+																				   server(net.server(), with_pack_settings(sp_server_config(seed, view_distance, auth_config), pack_runtime),
 																						   make_singleplayer_host(generator, pack_runtime, registry, move_params,
 																								   auth_config, &auth_service)) {
 		server.set_move_params(move_params);

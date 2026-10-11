@@ -57,6 +57,12 @@ function vb.register_item(def) end
 ---@field frames integer Frame count (> 0).
 ---@field fps number Frames per second (> 0).
 
+---@class EntityVisualLayer
+---@field texture string Pack-relative sheet; must be exactly the size of the base `texture`, or it is skipped with a warning.
+---@field below? boolean Draw before (behind) the base sheet instead of over it (default false).
+---@field rows? integer[] Only draw on these facing rows of the sheet, 0-7 (default every row), e.g. a cape behind the body on front views and over it on back views.
+---@field tint? integer[] `{r, g, b}` or `{r, g, b, a}`, 0-255, multiplied into the sheet (default white), so one greyscale sheet serves many dyes.
+
 ---@class EntityVisual
 ---@field variant string One of the frame-size presets, `small` ... `large_flat`.
 ---@field texture string Pack-relative spritesheet path.
@@ -66,6 +72,7 @@ function vb.register_item(def) end
 ---@field clips EntityVisualClip[] Non-empty animation clip list.
 ---@field layer? integer Draw order among overlapping sprites, -8..8 (default 0): a higher layer at the same spot always draws in front.
 ---@field through_walls? boolean Draw over terrain instead of being hidden by it, e.g. markers (default false).
+---@field layers? EntityVisualLayer[] Paper-doll sheets drawn in the same billboard as `texture`, in order, with the same frame, facing row and mirroring, so they never drift (max 16).
 
 ---@class EntityText
 ---@field value? string Label text: UTF-8, at most 64 bytes, `\n` starts a new line. Empty hides the label.

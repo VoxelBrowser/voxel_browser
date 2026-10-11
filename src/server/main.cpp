@@ -472,6 +472,7 @@ int main(int argc, char **argv) {
 	hs_config.view_distance = config.view_distance;
 	hs_config.motd = config.motd;
 	hs_config.engine_version_req = pack_manifest.engine_version_req.value_or("");
+	hs_config.third_person_allowed = pack_runtime.third_person_allowed();
 	hs_config.auth_mode = static_cast<vb::protocol::AuthMode>(config.auth_mode);
 	if (active_auth) {
 		// Derived from auth.lua's presence, never configured (auth.md §4).

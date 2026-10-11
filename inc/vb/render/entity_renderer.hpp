@@ -1,10 +1,15 @@
 #pragma once
 
 #include <cstddef>
+#include <filesystem>
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 
 #include "vb/core/ids.hpp"
 #include "vb/core/math.hpp"
+#include "vb/protocol/snapshot.hpp" // EntityRecord
 #include "vb/protocol/world.hpp" // EntityVisualDef
 #include "vb/render/texture_atlas.hpp" // VirtualFs
 
@@ -25,6 +30,8 @@ class ClientSession;
 namespace vb::render {
 
 class ChunkRenderer;
+struct KindVisual;
+struct LoadedTexture;
 
 struct CameraView {
 	core::Vec3d position{};
@@ -60,6 +67,15 @@ public:
 	// one copy taken right after join stays valid for the whole session.
 	void set_virtual_fs(VirtualFs vfs);
 
+	// Singleplayer has no synced pack: textures not in the VFS (instance
+	// overrides, paper-doll layers) are read from this content directory.
+	void set_disk_fallback(std::filesystem::path content_root);
+
+	// Third-person camera: also track and draw the local player (from local
+	// prediction), with its own appearance (ClientSession::
+	// my_visual_override()).
+	void set_draw_local_player(bool draw);
+
 	// Dropped-item entities (net::ClientSession::entity_item) are drawn as a
 	// small spinning cube coloured like the block they came from, using
 	// `chunks`' block colours. Must outlive this renderer; nullptr (the
@@ -85,6 +101,13 @@ public:
 	std::size_t tracked_count() const;
 
 private:
+	const LoadedTexture *load_texture(std::string_view context,
+			const std::string &path, const VirtualFs &vfs);
+	std::optional<KindVisual> build_visual(std::string_view context,
+			const protocol::EntityVisualDef &def, const VirtualFs &vfs);
+	const KindVisual *visual_for(core::NetId id, core::EntityKindId kind) const;
+	void track(const net::ClientSession &client, const protocol::EntityRecord &rec,
+			core::Vec3d pos, const CameraView &camera, double dt_seconds);
 	core::Vec3d resolve_render_pos(const net::ClientSession &client, core::NetId id,
 			const CameraView &camera, int depth) const;
 

@@ -17,3 +17,19 @@ Server pack VM only. Overrides the distance fog sent to clients.
 ```lua
 vb.render.set_fog{ start = 40, ["end"] = 120 }
 ```
+
+## vb.render.set_third_person
+
+`vb.render.set_third_person(allowed)`
+
+context: **load**
+
+Server pack VM only. Allows (default) or forbids the client's third-person camera (F5), which lets a player see their own appearance (`player:set_visual_override`).
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `allowed` | `boolean` |  |
+
+```lua
+vb.render.set_third_person(false)
+```

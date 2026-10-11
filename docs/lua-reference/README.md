@@ -22,6 +22,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`Player:get_login() -> Login|nil`](Player.md#player-get-login) — Server pack VM only. Verified login (frozen table), or `nil` when the server does not authenticate.
 - [`Player:damage(amount, cause)`](Player.md#player-damage) — Server pack VM only. Reduces health; `cause` is passed to `player_death` handlers.
 - [`Player:get_health() -> {current:`](Player.md#player-get-health) — Server pack VM only. Current and maximum health, or `nil` if the player is gone.
+- [`Player:set_visual_override(override)`](Player.md#player-set-visual-override) — Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any `EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every client in range sees it within a tick or two, including clients that come into range later and the player's own third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
 - [`Player:get_hunger() -> {current:`](Player.md#player-get-hunger) — Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 - [`Player:add_hunger(amount)`](Player.md#player-add-hunger) — Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to `[0, max]`.
 - [`Player:break_block(x, y, z) -> boolean`](Player.md#player-break-block) — Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
@@ -46,6 +47,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`Entity:set_clip(clip)`](Entity.md#entity-set-clip) — Server pack VM only. Forces the animation clip every client plays for this entity (any clip its sheet declares, e.g. `"open"`), instead of the one picked from its velocity and on-ground state. Sticky and replicated, including to players who join later; `nil` goes back to the automatic choice.
 - [`Entity:attach_to(parent, opts)`](Entity.md#entity-attach-to) — Server pack VM only. Attaches this entity to another entity or a player: from then on it moves with the parent (every tick on the server, every frame on clients, so it never trails behind) until `detach()`. If the parent despawns or leaves, this entity is removed too (`on_death` cause `"parent_removed"`). `set_pos` has no lasting effect while attached.
 - [`Entity:detach()`](Entity.md#entity-detach) — Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op when not attached.
+- [`Entity:set_visual_override(override)`](Entity.md#entity-set-visual-override) — Server pack VM only. Replaces (table) or clears (`nil`) this entity's per-instance visual override at runtime, same shape as `vb.world.spawn`'s `visual_override`. Replicated; the entity keeps its net id.
 
 ## `ui`
 
@@ -150,6 +152,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 [Full reference](vb.render.md)
 
 - [`vb.render.set_fog(def)`](vb.render.md#vb-render-set-fog) — Server pack VM only. Overrides the distance fog sent to clients.
+- [`vb.render.set_third_person(allowed)`](vb.render.md#vb-render-set-third-person) — Server pack VM only. Allows (default) or forbids the client's third-person camera (F5), which lets a player see their own appearance (`player:set_visual_override`).
 
 ## `vb.config`
 

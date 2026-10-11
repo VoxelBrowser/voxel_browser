@@ -457,6 +457,9 @@ void ClientApp::enter_playing() {
 			// an override's owning entity can spawn at any later time, not
 			// just during this one join-time pass).
 			entity_renderer->set_virtual_fs(std::move(entity_vfs));
+			if (!remote) {
+				entity_renderer->set_disk_fallback(kSingleplayerContentPack);
+			}
 		}
 	}
 	mouse_captured = false;
@@ -465,6 +468,7 @@ void ClientApp::enter_playing() {
 	chat_log.clear();
 	chat_buf.clear();
 	chat_open = false;
+	third_person = false;
 
 	if (!connecting_singleplayer) {
 		auto &recents = config.recent_servers;
@@ -804,6 +808,18 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				chat_open = true;
 			}
 
+			// F5: third-person camera, to see your own appearance (layers,
+			// player:set_visual_override). A pack can forbid it
+			// (vb.render.set_third_person(false) -> S2CServerInfo).
+			const bool third_person_allowed =
+					!client->server_info() || client->server_info()->third_person_allowed;
+			if (!chat_open && !ui_runtime.is_open() && input.key_pressed(KEY_F5)) {
+				third_person = !third_person;
+			}
+			if (!third_person_allowed) {
+				third_person = false;
+			}
+
 			// EnableCursor()/DisableCursor() each warp the OS cursor to
 			// screen center as a side effect (raylib's
 			// rcore_desktop_glfw.c), so they must only fire on the
@@ -1006,9 +1022,34 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				chunk_renderer->sync(client->chunk_store(), /*budget*/ 8);
 				chunk_count = chunk_renderer->uploaded_count();
 			}
+			// The view camera: the eye in first person; in third person pulled
+			// back along the look direction (stopping short of solid blocks)
+			// and looking at the eye, with the local player drawn.
+			const vb::core::Vec3d look_dir = controller.forward();
+			vb::core::Vec3d view_pos = controller.position();
+			if (third_person) {
+				const vb::core::Vec3d eye = controller.position();
+				double back = 0.0;
+				for (double t = 0.25; t <= kThirdPersonDistance + 1e-9; t += 0.25) {
+					const auto cell = [&](double e, double d) {
+						return static_cast<int>(std::floor(e - d * t));
+					};
+					const vb::core::IVec3 v{ cell(eye.x, look_dir.x), cell(eye.y, look_dir.y),
+						cell(eye.z, look_dir.z) };
+					if (client->chunk_store().solid_at(v)) {
+						break;
+					}
+					back = std::max(0.0, t - 0.2);
+				}
+				view_pos = { eye.x - look_dir.x * back, eye.y - look_dir.y * back,
+					eye.z - look_dir.z * back };
+			}
+			const vb::core::Vec3d view_target{ view_pos.x + look_dir.x,
+				view_pos.y + look_dir.y, view_pos.z + look_dir.z };
+			const vb::render::CameraView view{ view_pos, view_target };
 			if (entity_renderer) {
-				const vb::render::CameraView camera_view{ controller.position(),
-					controller.target() };
+				entity_renderer->set_draw_local_player(third_person);
+				const vb::render::CameraView camera_view = view;
 				entity_renderer->sync(*client, camera_view, dt);
 				entity_count = entity_renderer->tracked_count();
 			}
@@ -1095,15 +1136,18 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				chunk_renderer->set_fog(controller.position(), fog_color, fog_start, fog_end);
 			}
 
-			const Camera3D camera = to_camera(controller, fov);
+			Camera3D camera = to_camera(controller, fov);
+			camera.position = { static_cast<float>(view_pos.x), static_cast<float>(view_pos.y),
+				static_cast<float>(view_pos.z) };
+			camera.target = { static_cast<float>(view_target.x), static_cast<float>(view_target.y),
+				static_cast<float>(view_target.z) };
 			BeginMode3D(camera);
 			DrawGrid(64, 4.0f);
 			if (chunk_renderer) {
 				chunk_renderer->draw(camera);
 			}
 			if (entity_renderer) {
-				entity_renderer->draw(
-						{ controller.position(), controller.target() });
+				entity_renderer->draw(view);
 			}
 			if (look_hit.hit) {
 				const Vector3 hit_center{
@@ -1177,8 +1221,7 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				crack_overlay->end();
 			}
 			if (entity_renderer) {
-				entity_renderer->draw_labels(
-						{ controller.position(), controller.target() });
+				entity_renderer->draw_labels(view);
 			}
 			EndMode3D();
 			draw_overlay(controller, status, chunk_count, entity_count,

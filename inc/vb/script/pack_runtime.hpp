@@ -196,6 +196,9 @@ public:
 	// default to fall back on here -- the server doesn't know each client's
 	// view_distance).
 	std::optional<protocol::S2CFogParams> effective_fog_params() const;
+	// vb.render.set_third_person(allowed); true unless the pack forbade it.
+	// Copy into HandshakeServerConfig::third_person_allowed.
+	bool third_person_allowed() const;
 
 	// Phase 6.14: compiles a pack's `vb.worldgen.set_pipeline{...}` call (plus
 	// every `vb.register_biome` entry) into an immutable

@@ -96,6 +96,9 @@ struct S2CServerInfo {
 	// Empty = no requirement. The client refuses to continue when its own
 	// version does not satisfy it, before downloading any asset.
 	std::string engine_version_req;
+	// `vb.render.set_third_person(false)` (protocol v32): whether the client
+	// may switch to its third-person camera (F5).
+	bool third_person_allowed = true;
 
 	void encode(std::vector<std::byte> &out) const;
 	static Decoded<S2CServerInfo> decode(std::span<const std::byte> in);

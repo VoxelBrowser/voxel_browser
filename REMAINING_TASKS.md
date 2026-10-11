@@ -179,8 +179,12 @@ Full detail: `remaining_tasks/phase6.md`.
       `through_walls`, alpha-cutout + back-to-front entity drawing
       (all `S2C_EntityProps`, protocol 32).
 - [ ] Still open: no swing animation, no PvP armor/knockback.
-- [ ] `entity:set_visual_override()` after spawn is still missing (the
-      override is fixed for an entity's replicated lifetime).
+- [x] Paper-doll appearance (protocol 32): visual `layers` (below/rows/
+      tint), `player:`/`entity:set_visual_override` at runtime, own outfit
+      via the F5 third-person camera (`vb.render.set_third_person`).
+- [ ] UI `sprite` widget (wardrobe/preview screens) and a
+      `client.my_appearance()` UI binding -- the client side already has
+      `ClientSession::my_visual_override()`.
 
 ---
 

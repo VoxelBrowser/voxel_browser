@@ -1036,6 +1036,8 @@ void ServerSession::system_network_io(double dt_seconds) {
 				if (it->second.playing) {
 					--playing_;
 					interest_.remove(it->second.net_id);
+					script_entity_props_.erase(it->second.net_id);
+					dirty_entity_props_.erase(it->second.net_id);
 					block_damage_.remove_player(it->second.net_id);
 					region_occupancy_.erase(it->second.net_id);
 					if (replicator_) {
@@ -1582,25 +1584,15 @@ void ServerSession::remove_script_entity(core::NetId id) {
 		script_entities_.erase(it);
 	}
 	interest_.remove(id);
-	script_entity_visual_overrides_.erase(id);
 	script_entity_props_.erase(id);
 	dirty_entity_props_.erase(id);
-}
-
-void ServerSession::set_script_entity_visual_override(
-		core::NetId id, std::optional<protocol::EntityVisualOverride> override_def) {
-	if (override_def) {
-		script_entity_visual_overrides_[id] = std::move(*override_def);
-	} else {
-		script_entity_visual_overrides_.erase(id);
-	}
 }
 
 template <typename T>
 void ServerSession::set_script_entity_prop(core::NetId id,
 		std::optional<T> ScriptEntityProps::*field, std::optional<T> value,
 		std::uint8_t bit) {
-	if (script_entities_.find(id) == script_entities_.end()) {
+	if (script_entities_.find(id) == script_entities_.end() && !is_playing(id)) {
 		return;
 	}
 	const auto it = script_entity_props_.find(id);
@@ -1625,6 +1617,22 @@ void ServerSession::set_script_entity_text(
 		core::NetId id, std::optional<protocol::EntityText> text) {
 	set_script_entity_prop(id, &ScriptEntityProps::text, std::move(text),
 			protocol::kEntityPropText);
+}
+
+void ServerSession::set_script_entity_visual_override(
+		core::NetId id, std::optional<protocol::EntityVisualOverride> override_def) {
+	set_script_entity_prop(id, &ScriptEntityProps::visual, std::move(override_def),
+			protocol::kEntityPropVisual);
+}
+
+bool ServerSession::is_playing(core::NetId id) const {
+	for (const auto &[conn, state] : conns_) {
+		(void)conn;
+		if (state.playing && state.net_id == id) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void ServerSession::set_script_entity_clip(core::NetId id, std::optional<std::string> clip) {
@@ -1768,17 +1776,14 @@ void ServerSession::broadcast_snapshots() {
 		snap.server_tick = server_tick_;
 		for (core::NetId id : d.entered) {
 			if (const auto *e = interest_.get(id)) {
-				const auto ov_it = script_entity_visual_overrides_.find(id);
+				// A visual override travels in S2C_EntityProps (reliable, and
+				// changeable at runtime), not on this record.
 				const auto drop_it = item_drops_.drops().find(id);
-				const protocol::EntityVisualOverride *visual_override = nullptr;
-				if (ov_it != script_entity_visual_overrides_.end()) {
-					visual_override = &ov_it->second;
-				}
 				std::optional<std::uint16_t> item;
 				if (drop_it != item_drops_.drops().end()) {
 					item = static_cast<std::uint16_t>(drop_it->second.item);
 				}
-				snap.entered.push_back(to_record(*e, visual_override, item));
+				snap.entered.push_back(to_record(*e, nullptr, item));
 			}
 		}
 		for (core::NetId id : d.stayed) {
@@ -1808,6 +1813,9 @@ void ServerSession::broadcast_snapshots() {
 			if (mask & protocol::kEntityPropAttach) {
 				u.attach = p.attach;
 			}
+			if (mask & protocol::kEntityPropVisual) {
+				u.visual = p.visual;
+			}
 			props_msg.updates.push_back(std::move(u));
 		};
 		if (!script_entity_props_.empty()) {
@@ -1818,8 +1826,11 @@ void ServerSession::broadcast_snapshots() {
 			}
 		}
 		for (const auto &[id, mask] : dirty_entity_props_) {
-			// Not visible, or just entered (handled above).
-			if (std::binary_search(d.stayed.begin(), d.stayed.end(), id)) {
+			// Not visible, or just entered (handled above). A player's own
+			// appearance goes to them too (third-person camera, UI preview);
+			// interest culling never lists yourself.
+			if (id == state.net_id ||
+					std::binary_search(d.stayed.begin(), d.stayed.end(), id)) {
 				add_props(id, mask);
 			}
 		}
@@ -2510,7 +2521,10 @@ void ClientSession::apply_entity_props(const protocol::S2CEntityProps &msg) {
 		if (u.attach) {
 			p.attach = *u.attach;
 		}
-		if (!p.text && !p.clip && !p.attach) {
+		if (u.visual) {
+			p.visual = *u.visual;
+		}
+		if (!p.text && !p.clip && !p.attach && !p.visual) {
 			entity_props_.erase(u.net_id);
 		}
 	}
@@ -2585,6 +2599,7 @@ void ClientSession::apply_snapshot(const protocol::S2CEntitySnapshot &snap) {
 	}
 
 	if (snap.has_local) {
+		local_kind_ = snap.local.kind;
 		reconcile(snap.local, snap.last_acked_input_seq);
 	}
 }

@@ -48,6 +48,7 @@ void S2CServerInfo::encode(std::vector<std::byte> &out) const {
 	w.string(motd);
 	w.u8(static_cast<std::uint8_t>(auth_mode));
 	w.string(engine_version_req);
+	w.boolean(third_person_allowed);
 }
 
 Decoded<S2CServerInfo> S2CServerInfo::decode(std::span<const std::byte> in) {
@@ -67,6 +68,7 @@ Decoded<S2CServerInfo> S2CServerInfo::decode(std::span<const std::byte> in) {
 	if (!r.failed() && m.engine_version_req.size() > kMaxEngineVersionReqBytes) {
 		r.fail(ProtocolError::kLengthExceeded);
 	}
+	m.third_person_allowed = r.boolean();
 	return finish(r, std::move(m));
 }
 

@@ -191,7 +191,25 @@ rt.dispatch_tick(dt);
   the server every tick and on clients every frame (no trailing), and is
   despawned with cause `"parent_removed"` when the parent goes;
   `entity:detach()` lets go. A name tag is `visual = false` + `text =
-  {through_walls = true}` + `attach_to(player, {offset = {y = 2}})`. `vb.register_biome(def)` (Phase 6.14: `name`
+  {through_walls = true}` + `attach_to(player, {offset = {y = 2}})`. **Appearance and paper-doll layers** (protocol 32): a visual (the
+  kind's or an override) can list `layers = { {texture=, below=, rows=,
+  tint=}, ... }`, extra sheets drawn in the same billboard as the base
+  texture with the base frame's exact source rectangle, so clothing stays on
+  the same facing row and animation frame as the body from every angle
+  (separate attached entities can't guarantee that). Each layer sheet must
+  be exactly the base sheet's size; a mismatched or missing one is skipped
+  with a warning and the rest still draws. `below = true` draws a layer
+  behind the base; `rows = {...}` limits it to some facing rows (list one
+  cape sheet twice: `{below = true, rows = {0}}` and `{rows = {2}}` to sit
+  behind on front views and over on back views); `tint` dyes a greyscale
+  sheet. `player:set_visual_override(t|nil)` and
+  `entity:set_visual_override(t|nil)` change an appearance at any time;
+  it's replicated reliably to everyone in range, to late joiners and to the
+  player themselves, and clients cache sheets by path so swapping outfits
+  reloads nothing. A player's override lasts for their session (re-apply it
+  in `player_join`). Players see their own outfit with the third-person
+  camera (F5), which a pack can forbid with
+  `vb.render.set_third_person(false)`. `vb.register_biome(def)` (Phase 6.14: `name`
   (idempotent-by-name, mirrors every other registration function),
   `surface`/`filler`/`stone` (block *names*, resolved to `BlockId`s via the
   registry when a pipeline is compiled), `probability` (base Voronoi-cell

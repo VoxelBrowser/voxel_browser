@@ -10,6 +10,7 @@ Entity:set_clip
 Entity:set_health
 Entity:set_pos
 Entity:set_text
+Entity:set_visual_override
 Player:add_hunger
 Player:break_block
 Player:damage
@@ -30,6 +31,7 @@ Player:remove
 Player:send_message
 Player:set_pos
 Player:set_velocity
+Player:set_visual_override
 Player:take
 client.break_progress
 client.capture_mouse
@@ -81,6 +83,7 @@ vb.register_item
 vb.register_keybind
 vb.register_structure
 vb.render.set_fog
+vb.render.set_third_person
 vb.storage
 vb.world.get_block
 vb.world.raycast

@@ -280,6 +280,9 @@ private:
 	std::deque<std::string> chat_log;
 	std::string chat_buf;
 	bool chat_open = false;
+	// F5 third-person view (see the playing loop); off on every join.
+	bool third_person = false;
+	static constexpr double kThirdPersonDistance = 4.0;
 #if defined(VB_WITH_AUTOMATION)
 	bool headless_ui_eval = false;
 	std::vector<vb::script::Widget> hud_widget_cache;

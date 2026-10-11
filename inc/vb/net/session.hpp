@@ -439,15 +439,11 @@ public:
 	// update_attachments() while attached); nullopt for an unknown id.
 	std::optional<core::Vec3d> script_entity_pos(core::NetId id) const;
 
-	// Entity-management follow-up (spec architecture_spec/rendering.md
-	// §11.3's "Per-instance override"): `vb.world.spawn`'s `visual_override`
-	// option. `nullopt` clears it (no-op if never set). Attached to the one
-	// S2C_EntitySnapshot record a given observing client receives when this
-	// NetId first enters their interest set (protocol::EntityRecord::
-	// visual_override, see ServerSession::to_record/broadcast_snapshots) --
-	// fixed for the entity's whole replicated lifetime, same as `kind`; there
-	// is no path yet to change it after a client has already seen the entity
-	// (deliberately out of scope for this pass, see REMAINING_TASKS.md).
+	// The per-instance visual override (`vb.world.spawn`'s
+	// `visual_override`, player:/entity:set_visual_override). Replicated in
+	// S2C_EntityProps like the properties below, so it can change at any
+	// time; works for a playing player's net id as well as a script entity.
+	// `nullopt` clears it.
 	void set_script_entity_visual_override(
 			core::NetId id, std::optional<protocol::EntityVisualOverride> override_def);
 
@@ -700,11 +696,6 @@ private:
 	// set_script_entity_state()/remove_script_entity() can find the entity
 	// again by the id PackRuntime already tracks its Lua-side state under.
 	std::unordered_map<core::NetId, entt::entity> script_entities_;
-	// set_script_entity_visual_override()'s storage -- looked up by
-	// broadcast_snapshots() only when building an `entered` record (see
-	// to_record()); absent means the entity never set one.
-	std::unordered_map<core::NetId, protocol::EntityVisualOverride>
-			script_entity_visual_overrides_;
 	// set_script_entity_text()/_clip()/_attachment()'s storage (an entity
 	// with none of them has no entry), plus which properties of which ids
 	// changed since the last broadcast_snapshots() (which sends and clears
@@ -713,8 +704,9 @@ private:
 		std::optional<protocol::EntityText> text;
 		std::optional<std::string> clip;
 		std::optional<protocol::EntityAttachment> attach;
+		std::optional<protocol::EntityVisualOverride> visual;
 
-		bool empty() const { return !text && !clip && !attach; }
+		bool empty() const { return !text && !clip && !attach && !visual; }
 	};
 	std::unordered_map<core::NetId, ScriptEntityProps> script_entity_props_;
 	std::unordered_map<core::NetId, std::uint8_t> dirty_entity_props_;
@@ -723,6 +715,7 @@ private:
 	void set_script_entity_prop(core::NetId id, std::optional<T> ScriptEntityProps::*field,
 			std::optional<T> value, std::uint8_t bit);
 	void update_attachments();
+	bool is_playing(core::NetId id) const;
 	std::map<ConnId, Conn> conns_;
 	replication::InterestGrid interest_;
 	std::unique_ptr<WorldReplicator> replicator_;
@@ -921,6 +914,10 @@ public:
 	}
 
 	const physics::MoveState &predicted_state() const { return predicted_; }
+	// The entity kind the server reports for this client's own player
+	// (EntityRecord::kind of the snapshot's `local` record, i.e. the
+	// pack's represents="player" kind); kInvalid until the first snapshot.
+	core::EntityKindId local_entity_kind() const { return local_kind_; }
 	core::Vec3d predicted_feet() const { return predicted_.position; }
 	std::uint32_t last_acked_input_seq() const { return last_acked_seq_; }
 	std::size_t unacked_input_count() const { return history_.size(); }
@@ -985,8 +982,19 @@ public:
 	// never set one, same "missing = default" posture as entity_kind().
 	const protocol::EntityVisualOverride *entity_visual_override(
 			core::NetId id) const {
+		// Since protocol 32 the server sends it in S2C_EntityProps (and may
+		// change it at any time); the snapshot copy is only a fallback.
+		if (const auto p = entity_props_.find(id); p != entity_props_.end() && p->second.visual) {
+			return &*p->second.visual;
+		}
 		const auto it = entity_visual_overrides_.find(id);
 		return it == entity_visual_overrides_.end() ? nullptr : &it->second;
+	}
+	// The local player's own appearance (player:set_visual_override), for a
+	// third-person view or a UI preview; nullptr when the pack set none.
+	const protocol::EntityVisualOverride *my_visual_override() const {
+		const auto &ja = join_accept();
+		return ja ? entity_visual_override(ja->your_net_id) : nullptr;
 	}
 
 	// A script entity's S2C_EntityProps properties: its text label, the clip
@@ -1177,6 +1185,7 @@ private:
 		std::optional<protocol::EntityText> text;
 		std::optional<std::string> clip;
 		std::optional<protocol::EntityAttachment> attach;
+		std::optional<protocol::EntityVisualOverride> visual;
 		std::uint32_t server_tick = 0;
 	};
 	std::unordered_map<core::NetId, ReceivedEntityProps> entity_props_;
@@ -1185,6 +1194,7 @@ private:
 	BlockDamageTracker block_damage_;
 
 	physics::MoveState predicted_;
+	core::EntityKindId local_kind_ = core::EntityKindId::kInvalid;
 	physics::MoveParams move_params_;
 	std::vector<protocol::InputCmd> history_; // unacked, ascending seq
 	std::uint32_t last_acked_seq_ = 0;

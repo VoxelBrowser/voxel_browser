@@ -1,6 +1,7 @@
 #include "vb/protocol/world.hpp"
 
 #include "vb/protocol/byte_buffer.hpp"
+#include "visual_layer_codec.hpp"
 
 namespace vb::protocol {
 
@@ -206,6 +207,7 @@ void write_entity_visual(ByteWriter &w, const std::optional<EntityVisualDef> &vi
 	}
 	w.i8(visual->layer);
 	w.boolean(visual->through_walls);
+	detail::write_visual_layers(w, visual->layers);
 }
 
 std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
@@ -235,6 +237,7 @@ std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
 	}
 	v.layer = r.i8();
 	v.through_walls = r.boolean();
+	v.layers = detail::read_visual_layers(r);
 	return v;
 }
 

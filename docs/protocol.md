@@ -22,10 +22,16 @@ Current `ENGINE_PROTOCOL_VERSION`: **32**.
       has_layer` + `i8 layer`. The client draws the entity at the parent's
       interpolated position + offset (turned by the parent's yaw when
       `face_offset`); the server moves it there every tick as well.
-  - The server sends at most one per player per tick: all three fields of
-    every script entity with any of them that entered that player's interest
-    set this tick, plus each field that changed on an entity they already
-    see. The properties live as long as the entity is in the client's
+    - visual (bit 3): an `EntityVisualOverride` (same encoding as in
+      `EntityRecord`), replacing the entity's whole override. Since v32 the
+      server sends a spawn-time `visual_override` this way too (reliable,
+      and changeable later: `entity:/player:set_visual_override`), and never
+      on `EntityRecord`. Works for players' net ids as well.
+  - The server sends at most one per player per tick: every field of every
+    entity (script entity or player) with any of them that entered that
+    player's interest set this tick, plus each field that changed on an
+    entity they already see, plus changes to the recipient's own player (so
+    a client can draw its own outfit in third person). The properties live as long as the entity is in the client's
     interest set; because snapshots are unreliable and this is not, the
     client drops them on a snapshot `removed` entry only if they are older
     (`server_tick`) than the snapshot.
@@ -37,6 +43,12 @@ Current `ENGINE_PROTOCOL_VERSION`: **32**.
     `EntityVisualOverride` gains trailing `bool has + i8 layer` and `bool has
     + bool through_walls`. Each layer step draws a billboard 0.02 blocks
     nearer the camera; `through_walls` skips the depth test.
+  - `EntityVisualDef` gains trailing `varint n` (≤ 16) + `n ×
+    EntityVisualLayer`; `EntityVisualOverride` gains trailing `bool has +
+    layers` the same way. `EntityVisualLayer` = `string texture`, `bool
+    below`, `u8 rows` (bit i = pose row i; 0 = all rows), `u8×4 tint`.
+  - `S2C_ServerInfo` gains a trailing `bool third_person_allowed`
+    (`vb.render.set_third_person`).
   - `EntityKindRegistryRecord` gains a trailing `bool hidden`
     (`vb.register_entity{visual = false}`): the client draws no sprite or
     placeholder for that kind.

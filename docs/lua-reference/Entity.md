@@ -189,3 +189,19 @@ Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op whe
 ```lua
 hat:detach()
 ```
+
+## Entity:set_visual_override
+
+`Entity:set_visual_override(override)`
+
+context: **runtime**
+
+Server pack VM only. Replaces (table) or clears (`nil`) this entity's per-instance visual override at runtime, same shape as `vb.world.spawn`'s `visual_override`. Replicated; the entity keeps its net id.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `override` | `table|nil` |  |
+
+```lua
+npc:set_visual_override({ layers = { { texture = "textures/apron.png" } } })
+```

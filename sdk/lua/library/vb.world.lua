@@ -60,7 +60,7 @@ function vb.world.raycast(origin, dir, max) end
 function vb.world.spawn_item_drop(pos, item, count) end
 
 ---@class SpawnOptions
----@field visual_override? table Per-instance override of the kind's `visual` (every field optional, including `layer` and `through_walls`).
+---@field visual_override? table Per-instance override of the kind's `visual` (every field optional, including `layer`, `through_walls` and `layers`). Change it later with `entity:set_visual_override`.
 ---@field text? string|EntityText World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`.
 
 ---@vb context runtime

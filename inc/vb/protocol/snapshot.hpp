@@ -121,7 +121,8 @@ enum EntityPropField : std::uint8_t {
 	kEntityPropText = 1u << 0,
 	kEntityPropClip = 1u << 1,
 	kEntityPropAttach = 1u << 2,
-	kEntityPropAll = kEntityPropText | kEntityPropClip | kEntityPropAttach,
+	kEntityPropVisual = 1u << 3,
+	kEntityPropAll = kEntityPropText | kEntityPropClip | kEntityPropAttach | kEntityPropVisual,
 };
 
 inline constexpr std::size_t kMaxEntityClipNameBytes = 64;
@@ -133,6 +134,9 @@ struct EntityPropsUpdate {
 	std::optional<std::optional<EntityText>> text;
 	std::optional<std::optional<std::string>> clip; // entity:set_clip(name)
 	std::optional<std::optional<EntityAttachment>> attach;
+	// The per-instance visual override (spawn's `visual_override`,
+	// player:/entity:set_visual_override). Replaces the whole override.
+	std::optional<std::optional<EntityVisualOverride>> visual;
 
 	bool operator==(const EntityPropsUpdate &) const = default;
 };

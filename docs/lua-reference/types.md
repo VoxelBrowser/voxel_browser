@@ -170,6 +170,7 @@ integer Numeric entity kind id (registration order, starting at 1).
 | `clips` | `EntityVisualClip[]` | Non-empty animation clip list. |
 | `layer?` | `integer` | Draw order among overlapping sprites, -8..8 (default 0): a higher layer at the same spot always draws in front. |
 | `through_walls?` | `boolean` | Draw over terrain instead of being hidden by it, e.g. markers (default false). |
+| `layers?` | `EntityVisualLayer[]` | Paper-doll sheets drawn in the same billboard as `texture`, in order, with the same frame, facing row and mirroring, so they never drift (max 16). |
 
 ## EntityVisualClip
 
@@ -178,6 +179,15 @@ integer Numeric entity kind id (registration order, starting at 1).
 | `clip` | `string` | Clip name. |
 | `frames` | `integer` | Frame count (> 0). |
 | `fps` | `number` | Frames per second (> 0). |
+
+## EntityVisualLayer
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `texture` | `string` | Pack-relative sheet; must be exactly the size of the base `texture`, or it is skipped with a warning. |
+| `below?` | `boolean` | Draw before (behind) the base sheet instead of over it (default false). |
+| `rows?` | `integer[]` | Only draw on these facing rows of the sheet, 0-7 (default every row), e.g. a cape behind the body on front views and over it on back views. |
+| `tint?` | `integer[]` | `{r, g, b}` or `{r, g, b, a}`, 0-255, multiplied into the sheet (default white), so one greyscale sheet serves many dyes. |
 
 ## FbmDef
 
@@ -321,7 +331,7 @@ integer[] `{r, g, b, a?}`, 0-255 each.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional, including `layer` and `through_walls`). |
+| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional, including `layer`, `through_walls` and `layers`). Change it later with `entity:set_visual_override`. |
 | `text?` | `string|EntityText` | World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`. |
 
 ## StructureDef

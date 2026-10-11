@@ -4,6 +4,10 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -94,26 +98,45 @@ struct TrackedEntity {
 	explicit TrackedEntity(int initial_facings) : state(initial_facings) {}
 };
 
-// A kind's real spritesheet, uploaded once per session by set_kind_visual().
+// A resolved, drawable visual: the base sheet plus its paper-doll layers
+// (only those whose sheet loaded and matches the base size). Textures are
+// owned by Impl::textures, so swapping outfits never reloads a file.
 struct KindVisual {
 	Texture2D texture{};
 	EntityVisualLayout layout;
+	std::vector<protocol::EntityVisualLayer> layers;
+	std::vector<Texture2D> layer_textures; // parallel to `layers`
+};
+
+// A decoded sheet, cached by pack path for the whole session.
+struct LoadedTexture {
+	Texture2D texture{};
+	int width = 0;
+	int height = 0;
+};
+
+// A per-instance visual (override merged over the kind default) and the
+// merged def it was built from: rebuilt whenever that def changes.
+struct InstanceVisual {
+	protocol::EntityVisualDef def;
+	std::optional<KindVisual> visual;
 };
 
 struct EntityRenderer::Impl {
 	Texture2D placeholder{};
 	std::unordered_map<core::NetId, TrackedEntity> states;
 	std::unordered_map<core::EntityKindId, KindVisual> kind_visuals;
-	// Entity-management follow-up: per-NetId decoded override visuals, lazily
-	// built the first time sync() sees a ClientSession::entity_visual_override
-	// for that id (see decode_kind_visual()/sync() below). Takes priority
-	// over kind_visuals in draw() when present.
-	std::unordered_map<core::NetId, KindVisual> instance_visuals;
-	// Ids sync() has already attempted an override decode for, whether or not
-	// it succeeded -- an override is immutable for an entity's replicated
-	// lifetime (same as `kind`), so there's never a reason to retry.
-	std::unordered_set<core::NetId> instance_visual_attempted;
+	// Per-NetId visuals for entities (and players) with a visual override,
+	// rebuilt in sync() whenever the override -- which the server can change
+	// at any time (S2C_EntityProps) -- or the kind default changes. Takes
+	// priority over kind_visuals in draw() when it resolved.
+	std::unordered_map<core::NetId, InstanceVisual> instance_visuals;
+	// Every sheet decoded so far, by pack path; nullopt = failed to load
+	// (already warned about, never retried).
+	std::unordered_map<std::string, std::optional<LoadedTexture>> textures;
 	VirtualFs vfs; // set once, right after join, by set_virtual_fs()
+	std::filesystem::path disk_root; // set_disk_fallback()
+	bool draw_local_player = false; // set_draw_local_player()
 	const ChunkRenderer *chunks = nullptr; // set_block_colors()
 	// Alpha-cutout variant of raylib's default batch shader, so a sprite's
 	// clear margin never writes depth and hides an entity behind it.
@@ -186,64 +209,107 @@ EntityRenderer::~EntityRenderer() {
 	if (impl_->cutout.id != 0) {
 		UnloadShader(impl_->cutout);
 	}
-	for (auto &[id, visual] : impl_->kind_visuals) {
-		(void)id;
-		if (visual.texture.id != 0) {
-			UnloadTexture(visual.texture);
-		}
-	}
-	for (auto &[id, visual] : impl_->instance_visuals) {
-		(void)id;
-		if (visual.texture.id != 0) {
-			UnloadTexture(visual.texture);
+	for (auto &[path, tex] : impl_->textures) {
+		(void)path;
+		if (tex && tex->texture.id != 0) {
+			UnloadTexture(tex->texture);
 		}
 	}
 }
 
-namespace {
+// Decodes (once) and caches the sheet at pack path `path`: from the synced
+// pack, or in singleplayer from the content directory on disk. nullptr if it
+// can't be found or decoded.
+const LoadedTexture *EntityRenderer::load_texture(std::string_view context,
+		const std::string &path, const VirtualFs &vfs) {
+	if (const auto it = impl_->textures.find(path); it != impl_->textures.end()) {
+		return it->second ? &*it->second : nullptr;
+	}
+	std::optional<LoadedTexture> loaded;
+	std::vector<std::byte> bytes;
+	if (const auto it = vfs.find(path); it != vfs.end()) {
+		bytes = it->second;
+	} else if (const auto it2 = impl_->vfs.find(path); it2 != impl_->vfs.end()) {
+		bytes = it2->second;
+	} else if (!impl_->disk_root.empty() && path.find("..") == std::string::npos) {
+		std::ifstream f(impl_->disk_root / path, std::ios::binary);
+		if (f) {
+			const std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+			bytes.resize(data.size());
+			std::memcpy(bytes.data(), data.data(), data.size());
+		}
+	}
+	if (bytes.empty()) {
+		VB_WARN("render", context, ": texture '", path, "' not found in the pack");
+	} else {
+		Image decoded = LoadImageFromMemory(".png",
+				reinterpret_cast<const unsigned char *>(bytes.data()),
+				static_cast<int>(bytes.size()));
+		if (decoded.data == nullptr) {
+			VB_WARN("render", context, ": failed to decode '", path, "'");
+		} else {
+			loaded = LoadedTexture{ LoadTextureFromImage(decoded), decoded.width, decoded.height };
+			UnloadImage(decoded);
+		}
+	}
+	auto [it, inserted] = impl_->textures.emplace(path, std::move(loaded));
+	(void)inserted;
+	return it->second ? &*it->second : nullptr;
+}
 
-// Shared by set_kind_visual() (a kind's own default `visual`) and sync()'s
-// lazy per-instance override decode -- both decode a real PNG out of `vfs`
-// and validate it against a resolved protocol::EntityVisualDef the same way,
-// only differing in where the def came from and what to log on failure.
-// nullopt on any failure -- the caller keeps its existing fallback
-// (placeholder or, for an override, the kind's own visual).
-std::optional<KindVisual> decode_kind_visual(std::string_view context,
+// Resolves a full visual def into something draw() can use: the base sheet
+// validated against the declared layout, plus every layer whose sheet loads
+// and has the base sheet's exact size (others are skipped with a warning).
+// nullopt if the base sheet itself is unusable -- the caller keeps its
+// fallback (the kind's visual, or the flat placeholder).
+std::optional<KindVisual> EntityRenderer::build_visual(std::string_view context,
 		const protocol::EntityVisualDef &def, const VirtualFs &vfs) {
-	const auto it = vfs.find(def.texture);
-	if (it == vfs.end()) {
-		VB_WARN("render", context, ": texture '", def.texture,
-				"' not found in the synced pack, keeping placeholder");
+	if (def.texture.empty()) {
 		return std::nullopt;
 	}
-	Image decoded = LoadImageFromMemory(".png",
-			reinterpret_cast<const unsigned char *>(it->second.data()),
-			static_cast<int>(it->second.size()));
-	if (decoded.data == nullptr) {
-		VB_WARN("render", context, ": failed to decode '", def.texture, "'");
+	const LoadedTexture *base = load_texture(context, def.texture, vfs);
+	if (base == nullptr) {
 		return std::nullopt;
 	}
-	const auto layout = build_entity_visual_layout(def, decoded.width, decoded.height);
+	const auto layout = build_entity_visual_layout(def, base->width, base->height);
 	if (!layout) {
-		VB_WARN("render", context, ": '", def.texture, "' (", decoded.width, "x",
-				decoded.height, ") doesn't match its declared frame/facings/clip layout");
-		UnloadImage(decoded);
+		VB_WARN("render", context, ": '", def.texture, "' (", base->width, "x",
+				base->height, ") doesn't match its declared frame/facings/clip layout");
 		return std::nullopt;
 	}
 	KindVisual visual;
-	visual.texture = LoadTextureFromImage(decoded);
+	visual.texture = base->texture;
 	visual.layout = *layout;
-	UnloadImage(decoded);
+	for (const protocol::EntityVisualLayer &l : def.layers) {
+		const LoadedTexture *tex = load_texture(context, l.texture, vfs);
+		if (tex == nullptr) {
+			continue;
+		}
+		if (!layer_sheet_matches(base->width, base->height, tex->width, tex->height)) {
+			VB_WARN("render", context, ": layer '", l.texture, "' is ", tex->width, "x",
+					tex->height, " but its base sheet '", def.texture, "' is ", base->width,
+					"x", base->height, "; skipping that layer");
+			continue;
+		}
+		visual.layers.push_back(l);
+		visual.layer_textures.push_back(tex->texture);
+	}
 	return visual;
 }
 
-} // namespace
-
 void EntityRenderer::set_kind_visual(core::EntityKindId id,
 		const protocol::EntityVisualDef &def, const VirtualFs &vfs) {
-	if (auto visual = decode_kind_visual("entity kind visual", def, vfs)) {
+	if (auto visual = build_visual("entity kind visual", def, vfs)) {
 		impl_->kind_visuals.insert_or_assign(id, std::move(*visual));
 	}
+}
+
+void EntityRenderer::set_disk_fallback(std::filesystem::path content_root) {
+	impl_->disk_root = std::move(content_root);
+}
+
+void EntityRenderer::set_draw_local_player(bool draw) {
+	impl_->draw_local_player = draw;
 }
 
 void EntityRenderer::set_virtual_fs(VirtualFs vfs) {
@@ -295,16 +361,28 @@ void EntityRenderer::sync(const net::ClientSession &client,
 		const CameraView &camera, double dt_seconds) {
 	const auto &remote = client.remote_entities();
 
+	// The local player is never in remote_entities(); in third person it is
+	// tracked like any other entity, from local prediction.
+	std::optional<protocol::EntityRecord> local;
+	if (impl_->draw_local_player && client.join_accept()) {
+		protocol::EntityRecord r;
+		r.net_id = client.join_accept()->your_net_id;
+		r.kind = client.local_entity_kind();
+		const physics::MoveState &m = client.predicted_state();
+		r.pos = m.position;
+		r.vel = core::Vec3f{ static_cast<float>(m.velocity.x),
+			static_cast<float>(m.velocity.y), static_cast<float>(m.velocity.z) };
+		r.flags = m.on_ground ? kAnimOnGround : std::uint8_t{ 0 };
+		const auto pose = entity_pose(client, r.net_id, camera);
+		r.rot.x = pose ? pose->second : 0.0f;
+		local = r;
+	}
+
 	for (auto it = impl_->states.begin(); it != impl_->states.end();) {
-		if (remote.find(it->first) == remote.end()) {
-			if (const auto vis_it = impl_->instance_visuals.find(it->first);
-					vis_it != impl_->instance_visuals.end()) {
-				if (vis_it->second.texture.id != 0) {
-					UnloadTexture(vis_it->second.texture);
-				}
-				impl_->instance_visuals.erase(vis_it);
-			}
-			impl_->instance_visual_attempted.erase(it->first);
+		const bool keep = remote.find(it->first) != remote.end() ||
+				(local && local->net_id == it->first);
+		if (!keep) {
+			impl_->instance_visuals.erase(it->first);
 			it = impl_->states.erase(it);
 		} else {
 			++it;
@@ -312,105 +390,121 @@ void EntityRenderer::sync(const net::ClientSession &client,
 	}
 
 	for (const auto &[id, rec] : remote) {
-		auto [it, inserted] =
-				impl_->states.try_emplace(id, kDefaultFacings);
-		(void)inserted;
-		// Re-checked every sync (cheap: one map lookup) rather than only on
-		// insert, so a registry that arrives just after this entity's first
-		// snapshot still takes effect -- frame arrival order across the
-		// S2C_EntityKindRegistry/S2C_EntitySnapshot messages isn't guaranteed.
-		it->second.kind = rec.kind;
-		it->second.item = client.entity_item(id);
-		const protocol::EntityKindRegistryRecord *kind_record = client.entity_kind(rec.kind);
-		int layer = 0;
-		bool through_walls = false;
-		if (kind_record != nullptr) {
-			it->second.width = kind_record->width;
-			it->second.height = kind_record->height;
-			it->second.hidden = kind_record->hidden;
-			if (kind_record->visual) {
-				layer = kind_record->visual->layer;
-				through_walls = kind_record->visual->through_walls;
-			}
-		}
-		if (const protocol::EntityVisualOverride *ov = client.entity_visual_override(id)) {
-			layer = ov->layer.value_or(layer);
-			through_walls = ov->through_walls.value_or(through_walls);
-		}
-		const protocol::EntityAttachment *attachment = client.entity_attachment(id);
-		if (attachment != nullptr && attachment->layer) {
-			layer = *attachment->layer;
-		}
-		it->second.layer = layer;
-		it->second.through_walls = through_walls;
-		if (const std::string *clip = client.entity_clip(id)) {
-			if (it->second.forced_clip != *clip) {
-				it->second.forced_clip = *clip;
-				it->second.forced_clip_time = 0.0;
-			} else {
-				it->second.forced_clip_time += dt_seconds;
-			}
-		} else {
-			it->second.forced_clip.reset();
-		}
-		if (const protocol::EntityText *text = client.entity_text(id)) {
-			if (!it->second.text || *it->second.text != *text) {
-				it->second.text = *text;
-			}
-		} else {
-			it->second.text.reset();
-		}
-		// Entity-management follow-up: a per-instance visual_override is
-		// resolved (merged over the kind's own default, if any, then decoded)
-		// at most once per NetId -- see instance_visual_attempted's own
-		// comment for why a retry is never useful.
-		if (const protocol::EntityVisualOverride *override_def =
-						client.entity_visual_override(id)) {
-			if (impl_->instance_visual_attempted.insert(id).second) {
-				protocol::EntityVisualDef base;
-				if (kind_record != nullptr && kind_record->visual) {
-					base = *kind_record->visual;
-				}
-				const protocol::EntityVisualDef merged =
-						merge_visual_override(base, *override_def);
-				if (auto visual = decode_kind_visual(
-							"entity instance visual override", merged, impl_->vfs)) {
-					impl_->instance_visuals.insert_or_assign(id, std::move(*visual));
-				}
-			}
-		}
-		// Real bug fix: `state` used to be permanently constructed with
-		// kDefaultFacings (8) and never updated once the entity's real kind
-		// (or instance override) resolved a different facings/mirror -- pose
-		// selection silently ran against the wrong sector count/row-mirroring
-		// for any kind whose visual declared facings=4 (e.g. base:player),
-		// picking rows that could fall outside its own spritesheet.
-		// Re-resolve every sync() (cheap, two map lookups) from whichever
-		// KindVisual draw() will actually use for this id -- instance
-		// override wins over the kind default, matching draw()'s own
-		// priority -- and only rebuild `state` (which would otherwise reset
-		// clip_time/the bucket tracker every frame) when it actually changed.
-		int resolved_facings = kDefaultFacings;
-		bool resolved_mirror = true;
-		if (const auto inst_it = impl_->instance_visuals.find(id);
-				inst_it != impl_->instance_visuals.end()) {
-			resolved_facings = inst_it->second.layout.facings;
-			resolved_mirror = inst_it->second.layout.mirror;
-		} else if (const auto kind_it = impl_->kind_visuals.find(rec.kind);
-				kind_it != impl_->kind_visuals.end()) {
-			resolved_facings = kind_it->second.layout.facings;
-			resolved_mirror = kind_it->second.layout.mirror;
-		}
-		if (it->second.facings != resolved_facings || it->second.mirror != resolved_mirror) {
-			it->second.facings = resolved_facings;
-			it->second.mirror = resolved_mirror;
-			it->second.state = EntityPresentationState(resolved_facings, resolved_mirror);
-		}
-		const core::Vec3d pos = resolve_render_pos(client, id, camera, 0);
-		it->second.render_pos = pos;
-		it->second.state.update(pos, static_cast<double>(rec.rot.x), rec.vel,
-				rec.flags, camera.position, dt_seconds);
+		track(client, rec, resolve_render_pos(client, id, camera, 0), camera, dt_seconds);
 	}
+	if (local) {
+		track(client, *local, local->pos, camera, dt_seconds);
+	}
+}
+
+void EntityRenderer::track(const net::ClientSession &client,
+		const protocol::EntityRecord &rec, core::Vec3d pos, const CameraView &camera,
+		double dt_seconds) {
+	const core::NetId id = rec.net_id;
+	auto [it, inserted] = impl_->states.try_emplace(id, kDefaultFacings);
+	(void)inserted;
+	// Re-checked every sync (cheap: one map lookup) rather than only on
+	// insert, so a registry that arrives just after this entity's first
+	// snapshot still takes effect -- frame arrival order across the
+	// S2C_EntityKindRegistry/S2C_EntitySnapshot messages isn't guaranteed.
+	it->second.kind = rec.kind;
+	it->second.item = client.entity_item(id);
+	const protocol::EntityKindRegistryRecord *kind_record = client.entity_kind(rec.kind);
+	int layer = 0;
+	bool through_walls = false;
+	if (kind_record != nullptr) {
+		it->second.width = kind_record->width;
+		it->second.height = kind_record->height;
+		it->second.hidden = kind_record->hidden;
+		if (kind_record->visual) {
+			layer = kind_record->visual->layer;
+			through_walls = kind_record->visual->through_walls;
+		}
+	}
+	const protocol::EntityVisualOverride *override_def = client.entity_visual_override(id);
+	if (override_def != nullptr) {
+		layer = override_def->layer.value_or(layer);
+		through_walls = override_def->through_walls.value_or(through_walls);
+	}
+	const protocol::EntityAttachment *attachment = client.entity_attachment(id);
+	if (attachment != nullptr && attachment->layer) {
+		layer = *attachment->layer;
+	}
+	it->second.layer = layer;
+	it->second.through_walls = through_walls;
+	if (const std::string *clip = client.entity_clip(id)) {
+		if (it->second.forced_clip != *clip) {
+			it->second.forced_clip = *clip;
+			it->second.forced_clip_time = 0.0;
+		} else {
+			it->second.forced_clip_time += dt_seconds;
+		}
+	} else {
+		it->second.forced_clip.reset();
+	}
+	if (const protocol::EntityText *text = client.entity_text(id)) {
+		if (!it->second.text || *it->second.text != *text) {
+			it->second.text = *text;
+		}
+	} else {
+		it->second.text.reset();
+	}
+	// A per-instance visual override is merged over the kind's own default
+	// and rebuilt whenever the merged result changes (a new outfit, or the
+	// kind registry arriving late). Decoded sheets are cached by path, so
+	// this only re-validates layouts; nothing is reloaded.
+	if (override_def != nullptr) {
+		protocol::EntityVisualDef base;
+		if (kind_record != nullptr && kind_record->visual) {
+			base = *kind_record->visual;
+		}
+		protocol::EntityVisualDef merged = merge_visual_override(base, *override_def);
+		auto inst = impl_->instance_visuals.find(id);
+		if (inst == impl_->instance_visuals.end() || inst->second.def != merged) {
+			std::optional<KindVisual> visual =
+					build_visual("entity instance visual override", merged, impl_->vfs);
+			impl_->instance_visuals.insert_or_assign(id, InstanceVisual{ std::move(merged), std::move(visual) });
+		}
+	} else {
+		impl_->instance_visuals.erase(id);
+	}
+	// Real bug fix: `state` used to be permanently constructed with
+	// kDefaultFacings (8) and never updated once the entity's real kind
+	// (or instance override) resolved a different facings/mirror -- pose
+	// selection silently ran against the wrong sector count/row-mirroring
+	// for any kind whose visual declared facings=4 (e.g. base:player),
+	// picking rows that could fall outside its own spritesheet.
+	// Re-resolve every sync() from whichever KindVisual draw() will
+	// actually use for this id, and only rebuild `state` (which would
+	// otherwise reset clip_time/the bucket tracker every frame) when it
+	// actually changed.
+	int resolved_facings = kDefaultFacings;
+	bool resolved_mirror = true;
+	if (const KindVisual *v = visual_for(id, rec.kind)) {
+		resolved_facings = v->layout.facings;
+		resolved_mirror = v->layout.mirror;
+	}
+	if (it->second.facings != resolved_facings || it->second.mirror != resolved_mirror) {
+		it->second.facings = resolved_facings;
+		it->second.mirror = resolved_mirror;
+		it->second.state = EntityPresentationState(resolved_facings, resolved_mirror);
+	}
+	it->second.render_pos = pos;
+	it->second.state.update(pos, static_cast<double>(rec.rot.x), rec.vel,
+			rec.flags, camera.position, dt_seconds);
+}
+
+// The visual draw() uses for `id`: its resolved instance visual, else its
+// kind's, else nullptr (flat placeholder).
+const KindVisual *EntityRenderer::visual_for(core::NetId id, core::EntityKindId kind) const {
+	if (const auto inst = impl_->instance_visuals.find(id);
+			inst != impl_->instance_visuals.end() && inst->second.visual) {
+		return &*inst->second.visual;
+	}
+	if (const auto k = impl_->kind_visuals.find(kind); k != impl_->kind_visuals.end()) {
+		return &k->second;
+	}
+	return nullptr;
 }
 
 void EntityRenderer::set_block_colors(const ChunkRenderer *chunks) {
@@ -496,16 +590,9 @@ void EntityRenderer::draw(const CameraView &camera_view) const {
 		}
 		const EntityPresentationState::Frame &frame = tracked.state.frame();
 
-		// A per-instance override (if decoded successfully) always wins over
-		// the kind's own default visual -- see sync()'s lazy decode above.
-		const KindVisual *visual = nullptr;
-		if (const auto inst_it = impl_->instance_visuals.find(id);
-				inst_it != impl_->instance_visuals.end()) {
-			visual = &inst_it->second;
-		} else if (const auto kind_it = impl_->kind_visuals.find(tracked.kind);
-				kind_it != impl_->kind_visuals.end()) {
-			visual = &kind_it->second;
-		}
+		// A per-instance override (if it resolved) always wins over the
+		// kind's own default visual -- see track().
+		const KindVisual *visual = visual_for(id, tracked.kind);
 		const bool has_visual = visual != nullptr;
 
 		if (tracked.item && impl_->chunks != nullptr) {
@@ -568,9 +655,22 @@ void EntityRenderer::draw(const CameraView &camera_view) const {
 		const float origin_y = has_visual ? visual->layout.origin_y : 1.0f;
 		const Vector2 origin{ size.x * origin_x, size.y * (1.0f - origin_y) };
 
-		DrawBillboardPro(camera, texture, source, feet,
-				Vector3{ 0.0f, 1.0f, 0.0f }, size, origin, 0.0f,
-				has_visual ? WHITE : tint_for_entity(id));
+		if (!has_visual || visual->layers.empty()) {
+			DrawBillboardPro(camera, texture, source, feet,
+					Vector3{ 0.0f, 1.0f, 0.0f }, size, origin, 0.0f,
+					has_visual ? WHITE : tint_for_entity(id));
+			continue;
+		}
+		// Paper-doll layers: every sheet is drawn with the base frame's exact
+		// source rectangle, size and origin, so clothes can't drift from the
+		// body. Same depth, so GL_LEQUAL lets each later sheet win in order.
+		for (const int idx : layer_draw_order(visual->layers, frame.pose.pose_index)) {
+			const bool base = idx < 0;
+			const auto i = static_cast<std::size_t>(base ? 0 : idx);
+			DrawBillboardPro(camera, base ? texture : visual->layer_textures[i], source, feet,
+					Vector3{ 0.0f, 1.0f, 0.0f }, size, origin, 0.0f,
+					base ? WHITE : Color{ visual->layers[i].tint[0], visual->layers[i].tint[1], visual->layers[i].tint[2], visual->layers[i].tint[3] });
+		}
 	}
 	rlDrawRenderBatchActive();
 	if (!depth_test) {

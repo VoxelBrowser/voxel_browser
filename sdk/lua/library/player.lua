@@ -133,6 +133,21 @@ function Player:damage(amount, cause) end
 function Player:get_health() end
 
 ---@vb context runtime
+---Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any
+---`EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every
+---client in range sees it within a tick or two, including clients that come into range later and the player's own
+---third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
+---```lua
+---player:set_visual_override({ layers = {
+---  { texture = "textures/cape.png", below = true, rows = { 0 } },
+---  { texture = "textures/shirt_red.png" },
+---  { texture = "textures/hat_straw.png", tint = { 200, 60, 60 } },
+---} })
+---```
+---@param override table|nil
+function Player:set_visual_override(override) end
+
+---@vb context runtime
 ---Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 ---```lua
 ---local h = player:get_hunger()
@@ -327,3 +342,12 @@ function Entity:attach_to(parent, opts) end
 ---hat:detach()
 ---```
 function Entity:detach() end
+
+---@vb context runtime
+---Server pack VM only. Replaces (table) or clears (`nil`) this entity's per-instance visual override at runtime, same
+---shape as `vb.world.spawn`'s `visual_override`. Replicated; the entity keeps its net id.
+---```lua
+---npc:set_visual_override({ layers = { { texture = "textures/apron.png" } } })
+---```
+---@param override table|nil
+function Entity:set_visual_override(override) end

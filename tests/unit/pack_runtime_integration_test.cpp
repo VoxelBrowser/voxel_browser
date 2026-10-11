@@ -2155,6 +2155,162 @@ TEST_CASE("visual layer / through_walls are validated") {
 	)"));
 }
 
+TEST_CASE("player:set_visual_override replicates a paper-doll outfit to "
+		  "other players, to the player themselves and to late joiners, and "
+		  "can change or clear it at runtime") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("player_outfit"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.render.set_third_person(false)
+		vb.on("chat", function(player, text)
+			if text == "red" then
+				player:set_visual_override({ layers = {
+					{ texture = "textures/cape.png", below = true, rows = { 0 } },
+					{ texture = "textures/shirt_red.png" },
+					{ texture = "textures/hat_straw.png", tint = { 200, 60, 60 } },
+				} })
+			elseif text == "blue" then
+				player:set_visual_override({ layers = { { texture = "textures/shirt_blue.png" } } })
+			elseif text == "none" then
+				player:set_visual_override(nil)
+			end
+			return true
+		end)
+	)"));
+	rt.freeze();
+	CHECK_FALSE(rt.third_person_allowed());
+	CHECK_FALSE(rt.load_pack_file(R"( vb.render.set_third_person(true) )"));
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	cfg.third_person_allowed = rt.third_person_allowed();
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	std::vector<std::unique_ptr<ClientSession>> clients;
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			for (auto &c : clients) {
+				c->tick(0.05);
+			}
+		}
+	};
+	auto join = [&](const char *name, Vec3d pos) -> ClientSession & {
+		Transport &t = net.create_client();
+		auto id = t.connect("x", 0);
+		REQUIRE(id);
+		clients.push_back(std::make_unique<ClientSession>(t, *id, HandshakeClientConfig{ name, "", "v", 1 }));
+		pump(16);
+		REQUIRE(clients.back()->joined());
+		server.set_player_state(clients.back()->join_accept()->your_net_id, pos);
+		pump(2);
+		return *clients.back();
+	};
+	ClientSession &a = join("A", Vec3d{ 0, 65, 0 });
+	ClientSession &b = join("B", Vec3d{ 3, 65, 0 });
+	REQUIRE(a.server_info());
+	CHECK_FALSE(a.server_info()->third_person_allowed);
+	const NetId a_id = a.join_accept()->your_net_id;
+	REQUIRE(b.remote_entities().count(a_id) == 1);
+
+	a.send_chat("red");
+	pump(3);
+	for (const auto *ov : { b.entity_visual_override(a_id), a.my_visual_override() }) {
+		REQUIRE(ov != nullptr);
+		REQUIRE(ov->layers.has_value());
+		REQUIRE(ov->layers->size() == 3);
+		CHECK((*ov->layers)[0].below);
+		CHECK((*ov->layers)[0].rows == 0b0000'0001);
+		CHECK((*ov->layers)[1].texture == "textures/shirt_red.png");
+		CHECK((*ov->layers)[2].tint[1] == 60);
+	}
+
+	a.send_chat("blue");
+	pump(3);
+	REQUIRE(b.entity_visual_override(a_id) != nullptr);
+	CHECK((*b.entity_visual_override(a_id)->layers)[0].texture == "textures/shirt_blue.png");
+	REQUIRE(a.my_visual_override() != nullptr);
+	CHECK(a.my_visual_override()->layers->size() == 1);
+
+	ClientSession &c = join("C", Vec3d{ 0, 65, 3 });
+	pump(2);
+	REQUIRE(c.entity_visual_override(a_id) != nullptr);
+	CHECK((*c.entity_visual_override(a_id)->layers)[0].texture == "textures/shirt_blue.png");
+	CHECK(c.entity_visual_override(b.join_accept()->your_net_id) == nullptr); // B never dressed
+
+	a.send_chat("none");
+	pump(3);
+	CHECK(b.entity_visual_override(a_id) == nullptr);
+	CHECK(c.entity_visual_override(a_id) == nullptr);
+	CHECK(a.my_visual_override() == nullptr);
+}
+
+TEST_CASE("entity:set_visual_override changes a script entity's look at "
+		  "runtime; malformed layers are Lua errors") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_outfit"));
+	REQUIRE(rt.load_pack_file(R"( vb.register_entity({ name = "t:npc" }) )"));
+	rt.freeze();
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 0, 65, 2 });
+
+	REQUIRE(rt.load_pack_file(R"(
+		npc = vb.world.spawn("t:npc", { x = 0, y = 65, z = 0 },
+				{ visual_override = { texture = "textures/npc.png" } })
+	)"));
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId id = a.remote_entities().begin()->first;
+	REQUIRE(a.entity_visual_override(id) != nullptr);
+	CHECK(*a.entity_visual_override(id)->texture == "textures/npc.png");
+
+	REQUIRE(rt.load_pack_file(R"(
+		npc:set_visual_override({ texture = "textures/npc.png", layers = { { texture = "textures/apron.png" } } })
+	)"));
+	pump(2);
+	REQUIRE(a.entity_visual_override(id)->layers.has_value());
+	CHECK((*a.entity_visual_override(id)->layers)[0].texture == "textures/apron.png");
+	CHECK(a.remote_entities().begin()->first == id); // same entity, no respawn
+
+	REQUIRE(rt.load_pack_file(R"( npc:set_visual_override(nil) )"));
+	pump(2);
+	CHECK(a.entity_visual_override(id) == nullptr);
+
+	const auto expect_error = [&](const char *code, const char *needle) {
+		const auto r = rt.load_pack_file(code);
+		CHECK_FALSE(r);
+		CHECK_MESSAGE(r.message.find(needle) != std::string::npos, r.message);
+	};
+	expect_error(R"( npc:set_visual_override({ layers = { { below = true } } }) )",
+			"visual_override: layers[1].texture is required");
+	expect_error(R"( npc:set_visual_override({ layers = { { texture = "x.png", rows = { 9 } } } }) )",
+			"rows entries must be integers in [0, 7]");
+	expect_error(R"( npc:set_visual_override({ layers = { { texture = "x.png", tint = { 1, 2 } } } }) )",
+			"layers[1].tint must have 3 or 4 components");
+	expect_error(R"( npc:set_visual_override(5) )", "expected a table or nil");
+}
+
 TEST_CASE("region_enter/region_exit (Phase 7.3): fires once per crossing, "
 		  "not per tick spent inside, and passes the block's registered name") {
 	LoopbackNetwork net;

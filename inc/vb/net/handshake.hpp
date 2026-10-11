@@ -63,6 +63,9 @@ struct HandshakeServerConfig {
 	// Sent verbatim as S2CServerInfo::engine_version_req (pack.toml's
 	// engine_version_req; empty = no requirement).
 	std::string engine_version_req;
+	// Sent as S2CServerInfo::third_person_allowed (the pack's
+	// vb.render.set_third_person).
+	bool third_person_allowed = true;
 	protocol::AuthMode auth_mode = protocol::AuthMode::kNone;
 	std::uint32_t max_players = 16;
 	double handshake_timeout_seconds = 10.0;

@@ -220,6 +220,26 @@ Returns `{current:` — number, max: number}|nil
 local h = player:get_health(); print(h.current, h.max)
 ```
 
+## Player:set_visual_override
+
+`Player:set_visual_override(override)`
+
+context: **runtime**
+
+Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any `EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every client in range sees it within a tick or two, including clients that come into range later and the player's own third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `override` | `table|nil` |  |
+
+```lua
+player:set_visual_override({ layers = {
+ { texture = "textures/cape.png", below = true, rows = { 0 } },
+ { texture = "textures/shirt_red.png" },
+ { texture = "textures/hat_straw.png", tint = { 200, 60, 60 } },
+} })
+```
+
 ## Player:get_hunger
 
 `Player:get_hunger() -> {current:`
