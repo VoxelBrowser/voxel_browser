@@ -164,7 +164,7 @@ rt.dispatch_tick(dt);
   { value=, color=, background=, size=, offset_y=, max_distance=,
   through_walls= } }` attaches a camera-facing world-space label, drawn with
   the engine's UI font; `entity:set_text(...)` changes it at any time and is
-  replicated as a small `S2C_EntityText` delta (the entity keeps its net id,
+  replicated as a small `S2C_EntityProps` delta (the entity keeps its net id,
   so a countdown that ticks every second costs a few bytes per viewer, not a
   respawn), `entity:set_text(nil)` removes it, `entity:get_text()` reads the
   value back. `vb.register_entity{ text = {...} }` sets a kind's default
@@ -175,7 +175,23 @@ rt.dispatch_tick(dt);
   are `{r, g, b}`/`{r, g, b, a}` with 0-255 integers; both are checked in
   the binding and fail with a Lua error. Labels are depth-tested (walls hide
   them) unless `through_walls = true`, and `max_distance` hides one beyond
-  that many blocks. `vb.register_biome(def)` (Phase 6.14: `name`
+  that many blocks. **Clips, layers and attachments** (protocol 32): the
+  client picks a clip from the entity's velocity and on-ground flag (a
+  stationary script entity plays `idle`, a moving one `walk`/`run`);
+  `entity:set_clip(name)` forces any clip the sheet declares (`"open"`,
+  `"glow"`, a padding trick to show one frame) for every client, including
+  late joiners, until `set_clip(nil)`. A clip the sheet doesn't have falls
+  back to its first clip and logs one warning per sheet and clip name.
+  Overlapping sprites are drawn back to front with clear texels cut out (a
+  sprite's empty margin never hides what's behind it); `visual.layer`
+  (-8..8, also in `visual_override`) decides which of two sprites at the
+  same spot draws in front, and `visual.through_walls = true` draws over
+  terrain. `entity:attach_to(parent, { offset =, face_offset =, layer = })`
+  glues an entity to another entity or a player: it follows the parent on
+  the server every tick and on clients every frame (no trailing), and is
+  despawned with cause `"parent_removed"` when the parent goes;
+  `entity:detach()` lets go. A name tag is `visual = false` + `text =
+  {through_walls = true}` + `attach_to(player, {offset = {y = 2}})`. `vb.register_biome(def)` (Phase 6.14: `name`
   (idempotent-by-name, mirrors every other registration function),
   `surface`/`filler`/`stone` (block *names*, resolved to `BlockId`s via the
   registry when a pipeline is compiled), `probability` (base Voronoi-cell

@@ -54,6 +54,14 @@ void write_visual_override(ByteWriter &w, const EntityVisualOverride &v) {
 			w.f32(c.fps);
 		}
 	}
+	w.boolean(v.layer.has_value());
+	if (v.layer) {
+		w.i8(*v.layer);
+	}
+	w.boolean(v.through_walls.has_value());
+	if (v.through_walls) {
+		w.boolean(*v.through_walls);
+	}
 }
 
 EntityVisualOverride read_visual_override(ByteReader &r) {
@@ -91,6 +99,12 @@ EntityVisualOverride read_visual_override(ByteReader &r) {
 			clips.push_back(std::move(c));
 		}
 		v.clips = std::move(clips);
+	}
+	if (r.boolean()) {
+		v.layer = r.i8();
+	}
+	if (r.boolean()) {
+		v.through_walls = r.boolean();
 	}
 	return v;
 }
@@ -249,22 +263,49 @@ Decoded<S2CEntitySnapshot> S2CEntitySnapshot::decode(std::span<const std::byte> 
 	return m;
 }
 
-void S2CEntityText::encode(std::vector<std::byte> &out) const {
+void S2CEntityProps::encode(std::vector<std::byte> &out) const {
 	ByteWriter w(out);
 	w.u32(server_tick);
 	w.varint(updates.size());
 	for (const auto &u : updates) {
 		w.u32(static_cast<std::uint32_t>(u.net_id));
-		w.boolean(u.text.has_value());
+		const unsigned mask = (u.text ? unsigned{ kEntityPropText } : 0u) |
+				(u.clip ? unsigned{ kEntityPropClip } : 0u) |
+				(u.attach ? unsigned{ kEntityPropAttach } : 0u);
+		w.u8(static_cast<std::uint8_t>(mask));
 		if (u.text) {
-			write_entity_text(w, *u.text);
+			w.boolean(u.text->has_value());
+			if (*u.text) {
+				write_entity_text(w, **u.text);
+			}
+		}
+		if (u.clip) {
+			w.boolean(u.clip->has_value());
+			if (*u.clip) {
+				w.string(**u.clip);
+			}
+		}
+		if (u.attach) {
+			w.boolean(u.attach->has_value());
+			if (*u.attach) {
+				const EntityAttachment &a = **u.attach;
+				w.u32(static_cast<std::uint32_t>(a.parent));
+				w.f32(a.offset.x);
+				w.f32(a.offset.y);
+				w.f32(a.offset.z);
+				w.boolean(a.face_offset);
+				w.boolean(a.layer.has_value());
+				if (a.layer) {
+					w.i8(*a.layer);
+				}
+			}
 		}
 	}
 }
 
-Decoded<S2CEntityText> S2CEntityText::decode(std::span<const std::byte> in) {
+Decoded<S2CEntityProps> S2CEntityProps::decode(std::span<const std::byte> in) {
 	ByteReader r(in);
-	S2CEntityText m;
+	S2CEntityProps m;
 	m.server_tick = r.u32();
 	const std::uint64_t n = r.varint();
 	if (n > kMaxRecords) {
@@ -272,10 +313,39 @@ Decoded<S2CEntityText> S2CEntityText::decode(std::span<const std::byte> in) {
 	}
 	m.updates.reserve(static_cast<std::size_t>(n));
 	for (std::uint64_t i = 0; i < n && !r.failed(); ++i) {
-		EntityTextUpdate u;
+		EntityPropsUpdate u;
 		u.net_id = static_cast<core::NetId>(r.u32());
-		if (r.boolean()) {
-			u.text = read_entity_text(r);
+		const std::uint8_t mask = r.u8();
+		if ((mask & ~kEntityPropAll) != 0) {
+			r.fail(core::ProtocolError::kMalformed);
+			break;
+		}
+		if (mask & kEntityPropText) {
+			u.text.emplace();
+			if (r.boolean()) {
+				*u.text = read_entity_text(r);
+			}
+		}
+		if (mask & kEntityPropClip) {
+			u.clip.emplace();
+			if (r.boolean()) {
+				*u.clip = r.string(kMaxEntityClipNameBytes);
+			}
+		}
+		if (mask & kEntityPropAttach) {
+			u.attach.emplace();
+			if (r.boolean()) {
+				EntityAttachment a;
+				a.parent = static_cast<core::NetId>(r.u32());
+				a.offset.x = r.f32();
+				a.offset.y = r.f32();
+				a.offset.z = r.f32();
+				a.face_offset = r.boolean();
+				if (r.boolean()) {
+					a.layer = r.i8();
+				}
+				*u.attach = a;
+			}
 		}
 		m.updates.push_back(std::move(u));
 	}

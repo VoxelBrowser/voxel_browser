@@ -8,6 +8,14 @@
 | --- | --- | --- |
 | `reach?` | `number` | Maximum block interaction distance in blocks. |
 
+## AttachOptions
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `offset?` | `Vec3` | Position relative to the parent's position (default `{x=0, y=0, z=0}`). |
+| `face_offset?` | `boolean` | Turn `offset` with the parent's facing: x = right, z = forward (default false). |
+| `layer?` | `integer` | Overrides the visual's `layer` while attached, -8..8 (e.g. 1 to always draw in front of the parent). |
+
 ## AuthConfig
 
 | Field | Type | Description |
@@ -160,6 +168,8 @@ integer Numeric entity kind id (registration order, starting at 1).
 | `mirror?` | `boolean` | Flip the authored side pose for the opposite side (default true). |
 | `origin?` | `{x:` | number, y: number} Normalised anchor in a frame (default bottom-centre `{0.5, 1.0}`). |
 | `clips` | `EntityVisualClip[]` | Non-empty animation clip list. |
+| `layer?` | `integer` | Draw order among overlapping sprites, -8..8 (default 0): a higher layer at the same spot always draws in front. |
+| `through_walls?` | `boolean` | Draw over terrain instead of being hidden by it, e.g. markers (default false). |
 
 ## EntityVisualClip
 
@@ -311,7 +321,7 @@ integer[] `{r, g, b, a?}`, 0-255 each.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional). |
+| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional, including `layer` and `through_walls`). |
 | `text?` | `string|EntityText` | World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`. |
 
 ## StructureDef

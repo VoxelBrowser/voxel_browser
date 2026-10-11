@@ -204,6 +204,8 @@ void write_entity_visual(ByteWriter &w, const std::optional<EntityVisualDef> &vi
 		w.u16(c.frames);
 		w.f32(c.fps);
 	}
+	w.i8(visual->layer);
+	w.boolean(visual->through_walls);
 }
 
 std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
@@ -231,6 +233,8 @@ std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
 		c.fps = r.f32();
 		v.clips.push_back(std::move(c));
 	}
+	v.layer = r.i8();
+	v.through_walls = r.boolean();
 	return v;
 }
 

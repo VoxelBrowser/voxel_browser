@@ -323,6 +323,29 @@ TEST_CASE("content/base init.lua: vb.storage.boot_count persists across a restar
 	CHECK(second == doctest::Approx(first + 1.0));
 }
 
+TEST_CASE("a remote player standing on the ground replicates on_ground, "
+		  "so other clients can play idle/walk instead of jump") {
+	BasePackFixture fx("remote_player_on_ground");
+	fx.with_world();
+	vb::net::ClientSession &b = fx.add_client("B");
+	const double ground_top = fx.surface_y(0, 0) + 1.0;
+	fx.server().set_player_state(fx.player_id(), { 0.5, ground_top + 0.01, 0.5 });
+	b.set_local_feet({ 2.5, ground_top, 0.5 });
+	fx.server().set_player_state(b.join_accept()->your_net_id, { 2.5, ground_top, 0.5 });
+	for (int i = 0; i < 6; ++i) {
+		fx.release(); // empty InputCmd: physics settles A onto the ground
+	}
+	fx.pump(2);
+	REQUIRE(b.remote_entities().count(fx.player_id()) == 1);
+	CHECK((b.remote_entities().at(fx.player_id()).flags & 1u) != 0);
+
+	// Teleported into the air, the next simulated input clears it again.
+	fx.server().set_player_state(fx.player_id(), { 0.5, ground_top + 20.0, 0.5 });
+	fx.release();
+	fx.pump(2);
+	CHECK((b.remote_entities().at(fx.player_id()).flags & 1u) == 0);
+}
+
 #endif // VB_WITH_LUA
 
 

@@ -1970,6 +1970,191 @@ TEST_CASE("entity text labels: over-long text and bad colours are Lua errors") {
 	REQUIRE(rt.load_pack_file(R"( assert(e:get_text() == "ok") )"));
 }
 
+TEST_CASE("script entities replicate as grounded; set_clip is sticky, "
+		  "replicated and seen by a late joiner") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_clip"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:probe" })
+	)"));
+	rt.freeze();
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	std::unique_ptr<ClientSession> b;
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+			if (b) {
+				b->tick(0.05);
+			}
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 0.5, 65, 2 });
+
+	REQUIRE(rt.load_pack_file(R"(
+		probe = vb.world.spawn("t:probe", { x = 0.5, y = 65, z = 0.5 })
+	)"));
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId id = a.remote_entities().begin()->first;
+	// No physics: on_ground (bit 0) is set, so a stationary probe plays idle.
+	CHECK((a.remote_entities().begin()->second.flags & 1u) != 0);
+	CHECK(a.entity_clip(id) == nullptr);
+
+	REQUIRE(rt.load_pack_file(R"( probe:set_clip("jump") )"));
+	pump(2);
+	REQUIRE(a.entity_clip(id) != nullptr);
+	CHECK(*a.entity_clip(id) == "jump");
+
+	Transport &tb = net.create_client();
+	auto idb = tb.connect("x", 0);
+	REQUIRE(idb);
+	b = std::make_unique<ClientSession>(tb, *idb, HandshakeClientConfig{ "B", "", "v", 1 });
+	pump(16);
+	REQUIRE(b->joined());
+	server.set_player_state(b->join_accept()->your_net_id, Vec3d{ 2, 65, 0.5 });
+	pump(3);
+	REQUIRE(b->entity_clip(id) != nullptr);
+	CHECK(*b->entity_clip(id) == "jump");
+
+	REQUIRE(rt.load_pack_file(R"( probe:set_clip(nil) )"));
+	pump(2);
+	CHECK(a.entity_clip(id) == nullptr);
+	CHECK(b->entity_clip(id) == nullptr);
+
+	const auto bad = rt.load_pack_file(R"( probe:set_clip("") )");
+	CHECK_FALSE(bad);
+	CHECK(bad.message.find("clip name must be") != std::string::npos);
+}
+
+TEST_CASE("attach_to: the child follows its parent on the server and the "
+		  "client learns the link; it is despawned when the parent goes") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_attach"));
+	REQUIRE(rt.load_pack_file(R"(
+		deaths = {}
+		vb.register_entity({
+			name = "t:hat",
+			on_death = function(self, cause) deaths[#deaths + 1] = cause end,
+		})
+		vb.register_entity({ name = "t:npc" })
+		vb.on("chat", function(player, text)
+			if text == "hat" then
+				hat = vb.world.spawn("t:hat", player:get_pos())
+				hat:attach_to(player, { offset = { x = 0, y = 1.9, z = 0 }, layer = 1 })
+			end
+			return true
+		end)
+	)"));
+	rt.freeze();
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	const NetId me = a.join_accept()->your_net_id;
+	server.set_player_state(me, Vec3d{ 10, 65, 10 });
+
+	a.send_chat("hat");
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId hat = a.remote_entities().begin()->first;
+	const auto *link = a.entity_attachment(hat);
+	REQUIRE(link != nullptr);
+	CHECK(link->parent == me);
+	CHECK(link->offset.y == doctest::Approx(1.9f));
+	REQUIRE(link->layer.has_value());
+	CHECK(*link->layer == 1);
+
+	// The player walks; the hat goes with it, server-side too.
+	server.set_player_state(me, Vec3d{ 14, 66, 10 });
+	pump(2);
+	REQUIRE(rt.load_pack_file(R"(
+		local p = hat:get_pos()
+		assert(math.abs(p.x - 14) < 1e-6 and math.abs(p.y - 67.9) < 1e-6, p.x .. "," .. p.y)
+	)"));
+	CHECK(a.remote_entities().at(hat).pos.x == doctest::Approx(14.0));
+
+	// Chain: an npc carries a second hat; removing the npc removes the hat.
+	REQUIRE(rt.load_pack_file(R"(
+		npc = vb.world.spawn("t:npc", { x = 12, y = 65, z = 10 })
+		hat2 = vb.world.spawn("t:hat", { x = 12, y = 65, z = 10 })
+		hat2:attach_to(npc, { offset = { y = 2 } })
+		local ok, err = pcall(function() npc:attach_to(hat2) end)
+		assert(not ok and tostring(err):find("cycle"), tostring(err))
+		ok, err = pcall(function() npc:attach_to(npc) end)
+		assert(not ok and tostring(err):find("itself"), tostring(err))
+		ok, err = pcall(function() hat2:attach_to(npc, { layer = 9 }) end)
+		assert(not ok and tostring(err):find("%[%-8, 8%]"), tostring(err))
+	)"));
+	pump(2);
+	CHECK(a.remote_entities().size() == 3);
+	REQUIRE(rt.load_pack_file(R"( npc:remove("test") )"));
+	pump(3);
+	CHECK(a.remote_entities().size() == 1);
+	REQUIRE(rt.load_pack_file(R"(
+		assert(#deaths == 1 and deaths[1] == "parent_removed", tostring(deaths[1]))
+	)"));
+
+	// detach: the hat stays where it is and stops following.
+	REQUIRE(rt.load_pack_file(R"( hat:detach() )"));
+	pump(2);
+	CHECK(a.entity_attachment(hat) == nullptr);
+	server.set_player_state(me, Vec3d{ 20, 66, 10 });
+	pump(2);
+	REQUIRE(rt.load_pack_file(R"(
+		assert(math.abs(hat:get_pos().x - 14) < 1e-6)
+	)"));
+}
+
+TEST_CASE("visual layer / through_walls are validated") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_layer_bad"));
+	const auto r = rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:aura", visual = {
+			variant = "small", texture = "t.png", layer = 1.5,
+			clips = { { clip = "idle", frames = 1, fps = 1 } } } })
+	)");
+	CHECK_FALSE(r);
+	CHECK(r.message.find("visual.layer must be an integer in [-8, 8]") != std::string::npos);
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:ok", visual = {
+			variant = "small", texture = "t.png", layer = -1, through_walls = true,
+			clips = { { clip = "idle", frames = 1, fps = 1 } } } })
+	)"));
+}
+
 TEST_CASE("region_enter/region_exit (Phase 7.3): fires once per crossing, "
 		  "not per tick spent inside, and passes the block's registered name") {
 	LoopbackNetwork net;

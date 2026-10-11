@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -65,7 +66,7 @@ struct S2CEntitySnapshot {
 	static Decoded<S2CEntitySnapshot> decode(std::span<const std::byte> in);
 };
 
-// A world-space text label attached to a script entity (protocol v32;
+// A world-space text label on a script entity (protocol v32;
 // `vb.world.spawn(kind, pos, {text = ...})` / `entity:set_text(...)`). Always
 // fully resolved server-side (kind default + per-call fields merged by
 // PackRuntime), so the client never has to know a kind's text defaults.
@@ -85,29 +86,75 @@ struct EntityText {
 	bool operator==(const EntityText &) const = default;
 };
 
-struct EntityTextUpdate {
-	core::NetId net_id = core::NetId::kInvalid;
-	std::optional<EntityText> text; // nullopt = the label was removed
+// `entity:attach_to(parent, {offset=, face_offset=, layer=})`: the client
+// draws the entity at its parent's interpolated position plus `offset`, so
+// the two move together without the follower lagging a tick behind; the
+// server moves it the same way each tick so interest culling and
+// entity:get_pos() agree. With `face_offset`, `offset` is in the parent's
+// frame (x = right, z = forward at yaw 0 is -Z) and turns with its yaw.
+struct EntityAttachment {
+	core::NetId parent = core::NetId::kInvalid;
+	core::Vec3f offset{};
+	bool face_offset = false;
+	std::optional<std::int8_t> layer; // overrides the visual's layer while attached
 
-	bool operator==(const EntityTextUpdate &) const = default;
+	bool operator==(const EntityAttachment &) const = default;
 };
 
-// S2C_EntityText (protocol v32) -- lane kFeedback (reliable ordered), at most
-// one per player per server tick. Carries the current label of every script
-// entity that entered the recipient's interest set this tick and has one,
-// plus every label that changed (set or removed) on an entity already in it.
-// The text's lifetime on the client is the entity's: a snapshot `removed`
-// entry drops it. Because this is reliable and snapshots are not, the two can
-// arrive in either order; `server_tick` lets the client keep a label sent at
-// or after the tick of a (late) removal, see ClientSession::apply_snapshot.
-struct S2CEntityText {
-	static constexpr MessageType kType = MessageType::kS2CEntityText;
+// World-space offset of an attachment for a parent facing `parent_yaw_deg`
+// (same yaw convention as physics::wish_dir_from_local: yaw 0 faces -Z).
+inline core::Vec3d attachment_world_offset(const EntityAttachment &a, float parent_yaw_deg) {
+	const double x = a.offset.x;
+	const double y = a.offset.y;
+	const double z = a.offset.z;
+	if (!a.face_offset) {
+		return { x, y, z };
+	}
+	const double yaw = static_cast<double>(parent_yaw_deg) * 3.14159265358979323846 / 180.0;
+	const double sy = std::sin(yaw);
+	const double cy = std::cos(yaw);
+	return { cy * x - sy * z, y, sy * x + cy * z };
+}
+
+// Bit per field in EntityPropsUpdate (and on the wire).
+enum EntityPropField : std::uint8_t {
+	kEntityPropText = 1u << 0,
+	kEntityPropClip = 1u << 1,
+	kEntityPropAttach = 1u << 2,
+	kEntityPropAll = kEntityPropText | kEntityPropClip | kEntityPropAttach,
+};
+
+inline constexpr std::size_t kMaxEntityClipNameBytes = 64;
+
+// One entity's changed properties. An outer nullopt means "unchanged"; an
+// engaged outer holding an empty inner optional means "cleared".
+struct EntityPropsUpdate {
+	core::NetId net_id = core::NetId::kInvalid;
+	std::optional<std::optional<EntityText>> text;
+	std::optional<std::optional<std::string>> clip; // entity:set_clip(name)
+	std::optional<std::optional<EntityAttachment>> attach;
+
+	bool operator==(const EntityPropsUpdate &) const = default;
+};
+
+// S2C_EntityProps (protocol v32) -- lane kFeedback (reliable ordered), at
+// most one per player per server tick. Carries the pack-set, changeable
+// properties of script entities that don't belong in the per-tick snapshot:
+// every property of an entity that entered the recipient's interest set this
+// tick (all fields present, set or cleared), plus each property that changed
+// on an entity already in it. The properties' lifetime on the client is the
+// entity's: a snapshot `removed` entry drops them. Because this is reliable
+// and snapshots are not, the two can arrive in either order; `server_tick`
+// lets the client keep properties sent at or after the tick of a (late)
+// removal, see ClientSession::apply_snapshot.
+struct S2CEntityProps {
+	static constexpr MessageType kType = MessageType::kS2CEntityProps;
 
 	std::uint32_t server_tick = 0;
-	std::vector<EntityTextUpdate> updates;
+	std::vector<EntityPropsUpdate> updates;
 
 	void encode(std::vector<std::byte> &out) const;
-	static Decoded<S2CEntityText> decode(std::span<const std::byte> in);
+	static Decoded<S2CEntityProps> decode(std::span<const std::byte> in);
 };
 
 } // namespace vb::protocol

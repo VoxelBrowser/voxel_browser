@@ -26,6 +26,11 @@ struct EntityState {
 	core::Vec3d pos{};
 	core::Vec2f rot{}; // yaw, pitch
 	core::Vec3f vel{};
+	// Replicated as EntityRecord::flags (bit 0 = on_ground) so the client can
+	// pick idle/walk/run instead of jump/fall. Players copy their collider;
+	// anything without physics (script entities, item drops) counts as
+	// grounded.
+	std::uint8_t flags = 0;
 
 	bool operator==(const EntityState &) const = default;
 };

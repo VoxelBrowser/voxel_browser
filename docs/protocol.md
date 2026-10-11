@@ -6,23 +6,40 @@
 
 Current `ENGINE_PROTOCOL_VERSION`: **32**.
 
-- **32** — Entity text labels. New `S2C_EntityText` (61, lane `kFeedback`,
-  reliable ordered): `u32 server_tick`, `varint n` (≤ 65536) + `n ×
-  (u32 net_id, bool has_text, EntityText text if has_text)`; `has_text =
-  false` removes the label. `EntityText` = `string value` (UTF-8, ≤ 64 bytes,
-  `kMaxEntityTextBytes`; longer ⇒ `kLengthExceeded`), `u8×4 color` (RGBA),
-  `bool has_background` + `u8×4 background`, `f32 size` (line height,
-  metres), `f32 offset_y` (metres above the entity's position), `f32
-  max_distance` (0 = no limit), `bool through_walls`. The server sends at
-  most one per player per tick: the label of every script entity that
-  entered that player's interest set this tick, plus every label that
-  changed on an entity they already see. The label lives as long as the
-  entity is in the client's interest set; because snapshots are unreliable
-  and this is not, the client drops a label on a snapshot `removed` entry
-  only if the label's `server_tick` is older than the snapshot's.
-  `EntityKindRegistryRecord` gains a trailing `bool hidden`
-  (`vb.register_entity{visual = false}`): the client draws no sprite or
-  placeholder for that kind.
+- **32** — Entity labels, clips, attachments, layers and real on-ground flags.
+  - New `S2C_EntityProps` (61, lane `kFeedback`, reliable ordered): `u32
+    server_tick`, `varint n` (≤ 65536) + `n × (u32 net_id, u8 mask, fields)`.
+    `mask` bit 0 = text, bit 1 = clip, bit 2 = attachment (other bits ⇒
+    `kMalformed`); each present field is `bool has` + its value (`has =
+    false` clears it), an absent field is unchanged.
+    - text: `EntityText` = `string value` (UTF-8, ≤ 64 bytes,
+      `kMaxEntityTextBytes`; longer ⇒ `kLengthExceeded`), `u8×4 color` (RGBA),
+      `bool has_background` + `u8×4 background`, `f32 size` (line height,
+      metres), `f32 offset_y` (metres above the entity's position), `f32
+      max_distance` (0 = no limit), `bool through_walls`.
+    - clip: `string` (≤ 64 bytes), the clip `entity:set_clip` forces.
+    - attachment: `u32 parent`, `f32×3 offset`, `bool face_offset`, `bool
+      has_layer` + `i8 layer`. The client draws the entity at the parent's
+      interpolated position + offset (turned by the parent's yaw when
+      `face_offset`); the server moves it there every tick as well.
+  - The server sends at most one per player per tick: all three fields of
+    every script entity with any of them that entered that player's interest
+    set this tick, plus each field that changed on an entity they already
+    see. The properties live as long as the entity is in the client's
+    interest set; because snapshots are unreliable and this is not, the
+    client drops them on a snapshot `removed` entry only if they are older
+    (`server_tick`) than the snapshot.
+  - `EntityRecord.flags` bit 0 (`on_ground`) is now set on every record,
+    not just `local`: players copy their collider; script entities without
+    physics and item drops are always grounded. (Before, every remote entity
+    looked airborne and resolved to the `jump`/`fall` clip.)
+  - `EntityVisualDef` gains trailing `i8 layer` and `bool through_walls`;
+    `EntityVisualOverride` gains trailing `bool has + i8 layer` and `bool has
+    + bool through_walls`. Each layer step draws a billboard 0.02 blocks
+    nearer the camera; `through_walls` skips the depth test.
+  - `EntityKindRegistryRecord` gains a trailing `bool hidden`
+    (`vb.register_entity{visual = false}`): the client draws no sprite or
+    placeholder for that kind.
 
 - **31** — `S2C_BlockDamage` moves from lane `kWorld` to a new lane
   `kFeedback` (5, reliable ordered) and gains a trailing `u64 revision`: the
@@ -405,7 +422,7 @@ buffered, and yields `consumed` so a stream reader can advance.
 | 2    | `snapshot` | unreliable (seq-gated)  | entity snapshots                               |
 | 3    | `assets`   | reliable ordered       | asset manifest + file chunk transfer           |
 | 4    | `input`    | unreliable (seq)        | `C2S_InputBatch`                               |
-| 5    | `feedback` | reliable ordered       | `S2C_BlockDamage` (v31+), `S2C_EntityText` (v32+); not ordered against `world` |
+| 5    | `feedback` | reliable ordered       | `S2C_BlockDamage` (v31+), `S2C_EntityProps` (v32+); not ordered against `world` |
 
 ## Messages
 
@@ -433,10 +450,10 @@ buffered, and yields `consumed` so a stream reader can advance.
 | Type (id)               | Fields                                                                 |
 | ----------------------- | --------------------------------------------------------------------- |
 | `S2C_EntitySnapshot` (60) | `u32 server_tick`, `u32 last_acked_input_seq`, `varint n` + `n×EntityRecord entered`, `varint n` + `n×EntityRecord updated`, `varint n` + `n×u32 removed`, `bool has_local`, `EntityRecord local` (only if `has_local`) |
-| `S2C_EntityText` (61) | `u32 server_tick`, `varint n` + `n×(u32 net_id, bool has_text, EntityText text)` — see the version-32 entry above |
+| `S2C_EntityProps` (61) | `u32 server_tick`, `varint n` + `n×(u32 net_id, u8 mask, fields)` — see the version-32 entry above |
 
 `EntityRecord` = `u32 net_id`, `u16 kind`, `f64×3 pos`, `f32×2 rot` (yaw,pitch deg),
-`f32×3 vel`, `u8 flags` (bit 0 = `on_ground`), `bool has_override` + optional
+`f32×3 vel`, `u8 flags` (bit 0 = `on_ground`, set for every entity since v32), `bool has_override` + optional
 `EntityVisualOverride visual_override` (version 21, see that entry above —
 only ever set on an `entered` record). Interest culling excludes the
 recipient, so their own authoritative state rides in `local` for

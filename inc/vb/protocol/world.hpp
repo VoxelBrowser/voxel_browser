@@ -183,6 +183,13 @@ struct EntityVisualDef {
 	float origin_y = 1.0f;
 	bool mirror = true;
 	std::vector<EntityClipDef> clips;
+	// Protocol v32. Sprites that overlap draw in `layer` order: each step
+	// nudges the billboard 0.02 blocks toward the camera, so a layer 1 sprite
+	// at a player's exact position always wins the depth test against it
+	// (layer -1 always loses). Range [-8, 8], validated by the binding.
+	std::int8_t layer = 0;
+	// Skip the depth test so terrain never hides the sprite (markers).
+	bool through_walls = false;
 
 	bool operator==(const EntityVisualDef &) const = default;
 };
@@ -207,6 +214,8 @@ struct EntityVisualOverride {
 	std::optional<float> origin_y;
 	std::optional<bool> mirror;
 	std::optional<std::vector<EntityClipDef>> clips;
+	std::optional<std::int8_t> layer; // v32
+	std::optional<bool> through_walls; // v32
 
 	bool operator==(const EntityVisualOverride &) const = default;
 };
@@ -225,7 +234,7 @@ struct EntityKindRegistryRecord {
 	std::optional<EntityVisualDef> visual;
 	// `vb.register_entity{visual = false}` (protocol v32): draw no sprite and
 	// no placeholder quad at all -- for a text-only entity whose whole look
-	// is its S2C_EntityText label.
+	// is its S2C_EntityProps label.
 	bool hidden = false;
 
 	bool operator==(const EntityKindRegistryRecord &) const = default;

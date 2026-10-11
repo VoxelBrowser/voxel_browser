@@ -109,6 +109,12 @@ inline protocol::EntityVisualDef merge_visual_override(
 	if (over.clips) {
 		out.clips = *over.clips;
 	}
+	if (over.layer) {
+		out.layer = *over.layer;
+	}
+	if (over.through_walls) {
+		out.through_walls = *over.through_walls;
+	}
 	return out;
 }
 

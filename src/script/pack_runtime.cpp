@@ -368,6 +368,26 @@ const std::pair<std::uint16_t, std::uint16_t> *entity_visual_variant(const std::
 // side; the real PNG's pixel dimensions are validated client-side against
 // this def by render::build_entity_visual_layout() once the texture is
 // actually decoded.
+// `layer` in a visual / visual_override / attach_to table: an integer in
+// [-8, 8] (see protocol::EntityVisualDef::layer).
+std::int8_t parse_layer(const std::string &where, const sol::object &obj) {
+	if (obj.get_type() != sol::type::number) {
+		throw sol::error(where + " must be an integer in [-8, 8]");
+	}
+	const double v = obj.as<double>();
+	if (!(v >= -8.0 && v <= 8.0) || v != std::floor(v)) {
+		throw sol::error(where + " must be an integer in [-8, 8]");
+	}
+	return static_cast<std::int8_t>(v);
+}
+
+bool parse_bool(const std::string &where, const sol::object &obj) {
+	if (obj.get_type() != sol::type::boolean) {
+		throw sol::error(where + " must be a boolean");
+	}
+	return obj.as<bool>();
+}
+
 protocol::EntityVisualDef parse_entity_visual(const sol::table &t) {
 	const std::string variant_name = t.get_or("variant", std::string{});
 	const auto *variant = entity_visual_variant(variant_name);
@@ -423,6 +443,12 @@ protocol::EntityVisualDef parse_entity_visual(const sol::table &t) {
 			throw sol::error("vb.register_entity: visual.clips['" + clip_name + "'].fps must be positive");
 		}
 		visual.clips.push_back({ clip_name, static_cast<std::uint16_t>(frames), fps });
+	}
+	if (const sol::object v = t["layer"]; v.get_type() != sol::type::lua_nil) {
+		visual.layer = parse_layer("vb.register_entity: visual.layer", v);
+	}
+	if (const sol::object v = t["through_walls"]; v.get_type() != sol::type::lua_nil) {
+		visual.through_walls = parse_bool("vb.register_entity: visual.through_walls", v);
 	}
 	return visual;
 }
@@ -502,6 +528,12 @@ protocol::EntityVisualOverride parse_entity_visual_override(const sol::table &t)
 			clips.push_back({ clip_name, static_cast<std::uint16_t>(frames), fps });
 		}
 		out.clips = std::move(clips);
+	}
+	if (const sol::object v = t["layer"]; v.get_type() != sol::type::lua_nil) {
+		out.layer = parse_layer("visual_override: layer", v);
+	}
+	if (const sol::object v = t["through_walls"]; v.get_type() != sol::type::lua_nil) {
+		out.through_walls = parse_bool("visual_override: through_walls", v);
 	}
 	return out;
 }
@@ -731,6 +763,9 @@ struct ScriptEntity {
 	// The label this instance currently shows (already sent to
 	// ServerSession::set_script_entity_text); nullopt = none.
 	std::optional<protocol::EntityText> text;
+	// entity:attach_to's parent link (mirrors ServerSession's copy), kept here
+	// so attach_to can reject a cycle.
+	std::optional<protocol::EntityAttachment> attach;
 };
 
 struct BiomeDef {
@@ -2041,6 +2076,12 @@ void PackRuntime::Impl::install_bindings() {
 		if (it == entities.end()) {
 			throw sol::error("entity:get_pos(): entity is gone");
 		}
+		// An attached entity is moved by ServerSession every tick.
+		if (session != nullptr) {
+			if (const auto p = session->script_entity_pos(it->first)) {
+				it->second.pos = *p;
+			}
+		}
 		sol::table t = sv.create_table();
 		t["x"] = it->second.pos.x;
 		t["y"] = it->second.pos.y;
@@ -2114,7 +2155,7 @@ void PackRuntime::Impl::install_bindings() {
 	// style, or the kind's if there is no label yet); a table re-applies the
 	// kind's style with its own fields on top (an omitted `value` keeps the
 	// current text); nil or "" removes the label. Replicated as a small
-	// S2C_EntityText delta -- the entity keeps its net id.
+	// S2C_EntityProps delta -- the entity keeps its net id.
 	entity_methods["set_text"] = [this](sol::table self, sol::object arg) {
 		const core::NetId id = self_net_id(self);
 		const auto it = entities.find(id);
@@ -2141,6 +2182,114 @@ void PackRuntime::Impl::install_bindings() {
 		it->second.text = text;
 		if (session != nullptr) {
 			session->set_script_entity_text(id, std::move(text));
+		}
+	};
+	// Forces the animation clip every client plays for this entity (any name
+	// its sheet declares, e.g. "open"); nil returns to the automatic choice
+	// from velocity/on_ground. Sticky and replicated like set_text.
+	entity_methods["set_clip"] = [this](sol::table self, sol::object arg) {
+		const core::NetId id = self_net_id(self);
+		if (entities.find(id) == entities.end()) {
+			throw sol::error("entity:set_clip(): entity is gone");
+		}
+		std::optional<std::string> clip;
+		if (arg.get_type() == sol::type::string) {
+			clip = arg.as<std::string>();
+			if (clip->empty() || clip->size() > protocol::kMaxEntityClipNameBytes) {
+				throw sol::error("entity:set_clip(): clip name must be 1-" +
+						std::to_string(protocol::kMaxEntityClipNameBytes) + " bytes");
+			}
+		} else if (arg.get_type() != sol::type::lua_nil) {
+			throw sol::error("entity:set_clip(): expected a clip name or nil");
+		}
+		if (session != nullptr) {
+			session->set_script_entity_clip(id, std::move(clip));
+		}
+	};
+	// Glues this entity to `parent` (another entity, or a player): it then
+	// follows the parent every tick on the server and every frame on clients
+	// (no trailing). Despawned with cause "parent_removed" when the parent
+	// goes away. opts: offset = {x, y, z} (default 0), face_offset = bool
+	// (turn the offset with the parent's facing), layer = -8..8 (overrides
+	// the visual's layer while attached).
+	entity_methods["attach_to"] = [this](sol::table self, sol::object parent,
+										  sol::optional<sol::table> opts) {
+		const core::NetId id = self_net_id(self);
+		const auto it = entities.find(id);
+		if (it == entities.end()) {
+			throw sol::error("entity:attach_to(): entity is gone");
+		}
+		protocol::EntityAttachment a;
+		if (parent.is<PlayerHandle>()) {
+			a.parent = parent.as<PlayerHandle &>().net_id;
+			if (session == nullptr || !session->player_move_state(a.parent)) {
+				throw sol::error("entity:attach_to(): that player is not in the game");
+			}
+		} else if (parent.get_type() == sol::type::table) {
+			a.parent = self_net_id(parent.as<sol::table>());
+			if (entities.find(a.parent) == entities.end()) {
+				throw sol::error("entity:attach_to(): parent entity is gone");
+			}
+			if (a.parent == id) {
+				throw sol::error("entity:attach_to(): an entity can't attach to itself");
+			}
+			// Walk up the parent's chain: attaching to a descendant is a cycle.
+			core::NetId cur = a.parent;
+			for (int depth = 0; depth < 64; ++depth) {
+				const auto p = entities.find(cur);
+				if (p == entities.end() || !p->second.attach) {
+					break;
+				}
+				cur = p->second.attach->parent;
+				if (cur == id) {
+					throw sol::error("entity:attach_to(): that would make an attachment cycle");
+				}
+			}
+		} else {
+			throw sol::error("entity:attach_to(): parent must be an entity or a player");
+		}
+		if (opts) {
+			if (const sol::object off = (*opts)["offset"]; off.get_type() != sol::type::lua_nil) {
+				if (off.get_type() != sol::type::table) {
+					throw sol::error("entity:attach_to(): offset must be {x=, y=, z=}");
+				}
+				const sol::table t = off.as<sol::table>();
+				const auto axis = [&](const char *k) {
+					const sol::object v = t[k];
+					if (v.get_type() == sol::type::lua_nil) {
+						return 0.0f;
+					}
+					if (v.get_type() != sol::type::number || !std::isfinite(v.as<double>()) ||
+							std::abs(v.as<double>()) > 64.0) {
+						throw sol::error(std::string("entity:attach_to(): offset.") + k +
+								" must be a number in [-64, 64]");
+					}
+					return static_cast<float>(v.as<double>());
+				};
+				a.offset = core::Vec3f{ axis("x"), axis("y"), axis("z") };
+			}
+			if (const sol::object v = (*opts)["face_offset"]; v.get_type() != sol::type::lua_nil) {
+				a.face_offset = parse_bool("entity:attach_to(): face_offset", v);
+			}
+			if (const sol::object v = (*opts)["layer"]; v.get_type() != sol::type::lua_nil) {
+				a.layer = parse_layer("entity:attach_to(): layer", v);
+			}
+		}
+		it->second.attach = a;
+		if (session != nullptr) {
+			session->set_script_entity_attachment(id, a);
+		}
+	};
+	// Undoes attach_to; the entity stays where it is. No-op if not attached.
+	entity_methods["detach"] = [this](sol::table self) {
+		const core::NetId id = self_net_id(self);
+		const auto it = entities.find(id);
+		if (it == entities.end()) {
+			throw sol::error("entity:detach(): entity is gone");
+		}
+		it->second.attach.reset();
+		if (session != nullptr) {
+			session->set_script_entity_attachment(id, std::nullopt);
 		}
 	};
 	// The label's current value, or nil if the entity has none.
@@ -3409,6 +3558,9 @@ std::shared_ptr<const worldgen::PackWorldGenPipeline> PackRuntime::build_worldge
 
 void PackRuntime::attach_session(net::ServerSession &session) {
 	impl_->session = &session;
+	session.set_on_script_entity_orphaned([this](core::NetId id) {
+		impl_->despawn_entity(id, "parent_removed");
+	});
 	session.set_ui_event_handler(
 			[this](core::NetId player, const protocol::C2SUiEvent &e) {
 				dispatch_ui_event(player, e);

@@ -174,12 +174,13 @@ Full detail: `remaining_tasks/phase6.md`.
       moved to `ui.define_hud`, opt-in punch cooldown, held item / hotbar
       selection, unified reach (6.21), entity text labels (protocol 32:
       `vb.world.spawn{text=}`, `entity:set_text`, `visual = false`
-      text-only kinds, `S2C_EntityText`).
+      text-only kinds), real `on_ground` flags for every entity,
+      `entity:set_clip`, `entity:attach_to`/`detach`, sprite `layer`/
+      `through_walls`, alpha-cutout + back-to-front entity drawing
+      (all `S2C_EntityProps`, protocol 32).
 - [ ] Still open: no swing animation, no PvP armor/knockback.
-- [ ] Script entities never replicate `on_ground`/anim flags, so the client
-      resolves their clip to `jump`; needs either real flags or an
-      `entity:set_clip(name)` API. `entity:set_visual_override()` after spawn
-      is also still missing.
+- [ ] `entity:set_visual_override()` after spawn is still missing (the
+      override is fixed for an entity's replicated lifetime).
 
 ---
 

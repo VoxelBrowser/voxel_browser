@@ -291,3 +291,39 @@ function Entity:set_text(text) end
 ---```
 ---@return string|nil
 function Entity:get_text() end
+
+---@vb context runtime
+---Server pack VM only. Forces the animation clip every client plays for this entity (any clip its sheet declares,
+---e.g. `"open"`), instead of the one picked from its velocity and on-ground state. Sticky and replicated, including to
+---players who join later; `nil` goes back to the automatic choice.
+---```lua
+---chest:set_clip("open")
+---chest:set_clip(nil)
+---```
+---@param clip string|nil Clip name (1-64 bytes) or nil.
+function Entity:set_clip(clip) end
+
+---@class AttachOptions
+---@field offset? Vec3 Position relative to the parent's position (default `{x=0, y=0, z=0}`).
+---@field face_offset? boolean Turn `offset` with the parent's facing: x = right, z = forward (default false).
+---@field layer? integer Overrides the visual's `layer` while attached, -8..8 (e.g. 1 to always draw in front of the parent).
+
+---@vb context runtime
+---Server pack VM only. Attaches this entity to another entity or a player: from then on it moves with the parent
+---(every tick on the server, every frame on clients, so it never trails behind) until `detach()`. If the parent
+---despawns or leaves, this entity is removed too (`on_death` cause `"parent_removed"`). `set_pos` has no lasting
+---effect while attached.
+---```lua
+---local hat = vb.world.spawn("mypack:hat", player:get_pos())
+---hat:attach_to(player, { offset = { x = 0, y = 1.9, z = 0 }, layer = 1 })
+---```
+---@param parent Entity|Player
+---@param opts? AttachOptions
+function Entity:attach_to(parent, opts) end
+
+---@vb context runtime
+---Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op when not attached.
+---```lua
+---hat:detach()
+---```
+function Entity:detach() end

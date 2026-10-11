@@ -1,9 +1,12 @@
+Entity:attach_to
 Entity:damage
+Entity:detach
 Entity:get_health
 Entity:get_kind
 Entity:get_pos
 Entity:get_text
 Entity:remove
+Entity:set_clip
 Entity:set_health
 Entity:set_pos
 Entity:set_text

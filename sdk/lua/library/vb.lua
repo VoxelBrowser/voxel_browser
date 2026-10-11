@@ -64,6 +64,8 @@ function vb.register_item(def) end
 ---@field mirror? boolean Flip the authored side pose for the opposite side (default true).
 ---@field origin? {x: number, y: number} Normalised anchor in a frame (default bottom-centre `{0.5, 1.0}`).
 ---@field clips EntityVisualClip[] Non-empty animation clip list.
+---@field layer? integer Draw order among overlapping sprites, -8..8 (default 0): a higher layer at the same spot always draws in front.
+---@field through_walls? boolean Draw over terrain instead of being hidden by it, e.g. markers (default false).
 
 ---@class EntityText
 ---@field value? string Label text: UTF-8, at most 64 bytes, `\n` starts a new line. Empty hides the label.

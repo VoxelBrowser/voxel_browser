@@ -80,6 +80,16 @@ struct TrackedEntity {
 	// The entity's current label, copied from ClientSession::entity_text()
 	// every sync(); nullopt = none.
 	std::optional<protocol::EntityText> text;
+	// Where to draw it this frame: the interpolated position, or for an
+	// attached entity its parent's position + offset (resolved in sync()).
+	core::Vec3d render_pos{};
+	// Depth-order step (protocol::EntityVisualDef::layer, overridden per
+	// instance and by an attachment) and the "draw over terrain" flag.
+	int layer = 0;
+	bool through_walls = false;
+	// entity:set_clip(name), and how long it has been playing.
+	std::optional<std::string> forced_clip;
+	double forced_clip_time = 0.0;
 
 	explicit TrackedEntity(int initial_facings) : state(initial_facings) {}
 };
@@ -105,17 +115,76 @@ struct EntityRenderer::Impl {
 	std::unordered_set<core::NetId> instance_visual_attempted;
 	VirtualFs vfs; // set once, right after join, by set_virtual_fs()
 	const ChunkRenderer *chunks = nullptr; // set_block_colors()
+	// Alpha-cutout variant of raylib's default batch shader, so a sprite's
+	// clear margin never writes depth and hides an entity behind it.
+	Shader cutout{};
+	int cutout_loc_alpha = -1;
+	// "<texture>/<clip>" pairs already warned about falling back to the
+	// first clip -- once each, so a missing clip is easy to spot in the log.
+	mutable std::unordered_set<std::string> warned_clip_fallbacks;
 };
+
+namespace {
+
+// raylib's default batch shader (rlgl.h RL_DEFAULT_SHADER_*), plus a discard
+// below `alphaCutoff` -- the same cutout block textures get (see
+// chunk_renderer.cpp's kFogFs), here for billboards and dropped items.
+constexpr const char *kCutoutVs = R"(#version 330
+in vec3 vertexPosition;
+in vec2 vertexTexCoord;
+in vec4 vertexColor;
+out vec2 fragTexCoord;
+out vec4 fragColor;
+uniform mat4 mvp;
+void main()
+{
+    fragTexCoord = vertexTexCoord;
+    fragColor = vertexColor;
+    gl_Position = mvp*vec4(vertexPosition, 1.0);
+}
+)";
+
+constexpr const char *kCutoutFs = R"(#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+out vec4 finalColor;
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+uniform float alphaCutoff;
+void main()
+{
+    vec4 c = texture(texture0, fragTexCoord)*colDiffuse*fragColor;
+    if (c.a < alphaCutoff) {
+        discard;
+    }
+    finalColor = c;
+}
+)";
+
+// Low enough that soft edges and glows still blend (sprites are drawn back
+// to front for that), high enough that a clear margin writes no depth.
+constexpr float kAlphaCutoff = 0.02f;
+// How far one layer step moves a billboard toward the camera.
+constexpr double kLayerStep = 0.02;
+
+} // namespace
 
 EntityRenderer::EntityRenderer() : impl_(std::make_unique<Impl>()) {
 	Image img = GenImageColor(1, 1, WHITE);
 	impl_->placeholder = LoadTextureFromImage(img);
 	UnloadImage(img);
+	impl_->cutout = LoadShaderFromMemory(kCutoutVs, kCutoutFs);
+	impl_->cutout_loc_alpha = GetShaderLocation(impl_->cutout, "alphaCutoff");
+	SetShaderValue(impl_->cutout, impl_->cutout_loc_alpha, &kAlphaCutoff,
+			SHADER_UNIFORM_FLOAT);
 }
 
 EntityRenderer::~EntityRenderer() {
 	if (impl_->placeholder.id != 0) {
 		UnloadTexture(impl_->placeholder);
+	}
+	if (impl_->cutout.id != 0) {
+		UnloadShader(impl_->cutout);
 	}
 	for (auto &[id, visual] : impl_->kind_visuals) {
 		(void)id;
@@ -181,6 +250,47 @@ void EntityRenderer::set_virtual_fs(VirtualFs vfs) {
 	impl_->vfs = std::move(vfs);
 }
 
+namespace {
+
+// Feet position and yaw of `id` as this client sees it: its own player from
+// local prediction (yaw from the camera), anyone else interpolated.
+std::optional<std::pair<core::Vec3d, float>> entity_pose(
+		const net::ClientSession &client, core::NetId id, const CameraView &camera) {
+	if (client.join_accept() && client.join_accept()->your_net_id == id) {
+		const double fx = camera.target.x - camera.position.x;
+		const double fz = camera.target.z - camera.position.z;
+		// Yaw 0 faces -Z (physics::wish_dir_from_local's convention).
+		const float yaw = static_cast<float>(std::atan2(fx, -fz) * 180.0 / 3.14159265358979323846);
+		return std::make_pair(client.predicted_feet(), yaw);
+	}
+	const auto it = client.remote_entities().find(id);
+	if (it == client.remote_entities().end()) {
+		return std::nullopt;
+	}
+	return std::make_pair(client.interpolated_pos(id), it->second.rot.x);
+}
+
+} // namespace
+
+// An attached entity is drawn at its parent's (recursively resolved) pose +
+// offset each frame, so it never trails the parent; if the parent isn't
+// visible here, its own replicated position (which the server keeps glued
+// to the parent) is used instead.
+core::Vec3d EntityRenderer::resolve_render_pos(const net::ClientSession &client,
+		core::NetId id, const CameraView &camera, int depth) const {
+	const protocol::EntityAttachment *a = client.entity_attachment(id);
+	if (a != nullptr && depth < 8) {
+		if (const auto parent = entity_pose(client, a->parent, camera)) {
+			const core::Vec3d base = client.entity_attachment(a->parent) != nullptr
+					? resolve_render_pos(client, a->parent, camera, depth + 1)
+					: parent->first;
+			const core::Vec3d off = protocol::attachment_world_offset(*a, parent->second);
+			return { base.x + off.x, base.y + off.y, base.z + off.z };
+		}
+	}
+	return client.interpolated_pos(id);
+}
+
 void EntityRenderer::sync(const net::ClientSession &client,
 		const CameraView &camera, double dt_seconds) {
 	const auto &remote = client.remote_entities();
@@ -212,10 +322,36 @@ void EntityRenderer::sync(const net::ClientSession &client,
 		it->second.kind = rec.kind;
 		it->second.item = client.entity_item(id);
 		const protocol::EntityKindRegistryRecord *kind_record = client.entity_kind(rec.kind);
+		int layer = 0;
+		bool through_walls = false;
 		if (kind_record != nullptr) {
 			it->second.width = kind_record->width;
 			it->second.height = kind_record->height;
 			it->second.hidden = kind_record->hidden;
+			if (kind_record->visual) {
+				layer = kind_record->visual->layer;
+				through_walls = kind_record->visual->through_walls;
+			}
+		}
+		if (const protocol::EntityVisualOverride *ov = client.entity_visual_override(id)) {
+			layer = ov->layer.value_or(layer);
+			through_walls = ov->through_walls.value_or(through_walls);
+		}
+		const protocol::EntityAttachment *attachment = client.entity_attachment(id);
+		if (attachment != nullptr && attachment->layer) {
+			layer = *attachment->layer;
+		}
+		it->second.layer = layer;
+		it->second.through_walls = through_walls;
+		if (const std::string *clip = client.entity_clip(id)) {
+			if (it->second.forced_clip != *clip) {
+				it->second.forced_clip = *clip;
+				it->second.forced_clip_time = 0.0;
+			} else {
+				it->second.forced_clip_time += dt_seconds;
+			}
+		} else {
+			it->second.forced_clip.reset();
 		}
 		if (const protocol::EntityText *text = client.entity_text(id)) {
 			if (!it->second.text || *it->second.text != *text) {
@@ -270,7 +406,8 @@ void EntityRenderer::sync(const net::ClientSession &client,
 			it->second.mirror = resolved_mirror;
 			it->second.state = EntityPresentationState(resolved_facings, resolved_mirror);
 		}
-		const core::Vec3d pos = client.interpolated_pos(id);
+		const core::Vec3d pos = resolve_render_pos(client, id, camera, 0);
+		it->second.render_pos = pos;
 		it->second.state.update(pos, static_cast<double>(rec.rot.x), rec.vel,
 				rec.flags, camera.position, dt_seconds);
 	}
@@ -301,11 +438,63 @@ void draw_item_cube(Vector3 feet, Color color, float phase) {
 
 void EntityRenderer::draw(const CameraView &camera_view) const {
 	const Camera3D camera = to_raylib_camera(camera_view);
+	const core::Vec3d eye = camera_view.position;
+
+	// Back to front (so soft edges blend over what's behind them), with
+	// through-walls sprites last since they ignore the depth buffer. Each
+	// layer step moves the billboard kLayerStep toward the camera, so a
+	// higher layer at the same spot always wins the depth test and is drawn
+	// after the lower one.
+	struct Pending {
+		core::NetId id;
+		const TrackedEntity *tracked;
+		Vector3 pos;
+		double dist_sq;
+	};
+	std::vector<Pending> pending;
+	pending.reserve(impl_->states.size());
 	for (const auto &[id, tracked] : impl_->states) {
+		if (tracked.hidden) {
+			continue;
+		}
+		core::Vec3d p = tracked.render_pos;
+		if (tracked.layer != 0) {
+			const core::Vec3d to_eye{ eye.x - p.x, eye.y - p.y, eye.z - p.z };
+			const double len = std::sqrt(to_eye.x * to_eye.x + to_eye.y * to_eye.y + to_eye.z * to_eye.z);
+			if (len > 1e-6) {
+				const double k = kLayerStep * tracked.layer / len;
+				p = { p.x + to_eye.x * k, p.y + to_eye.y * k, p.z + to_eye.z * k };
+			}
+		}
+		const double dx = p.x - eye.x;
+		const double dy = p.y - eye.y;
+		const double dz = p.z - eye.z;
+		pending.push_back({ id, &tracked,
+				Vector3{ static_cast<float>(p.x), static_cast<float>(p.y), static_cast<float>(p.z) },
+				dx * dx + dy * dy + dz * dz });
+	}
+	std::sort(pending.begin(), pending.end(), [](const Pending &x, const Pending &y) {
+		if (x.tracked->through_walls != y.tracked->through_walls) {
+			return !x.tracked->through_walls;
+		}
+		if (x.dist_sq != y.dist_sq) {
+			return x.dist_sq > y.dist_sq;
+		}
+		return x.id < y.id; // stable across frames and sessions
+	});
+
+	BeginShaderMode(impl_->cutout);
+	bool depth_test = true;
+	for (const Pending &p : pending) {
+		const core::NetId id = p.id;
+		const TrackedEntity &tracked = *p.tracked;
+		const Vector3 feet = p.pos;
+		if (tracked.through_walls && depth_test) {
+			rlDrawRenderBatchActive();
+			rlDisableDepthTest();
+			depth_test = false;
+		}
 		const EntityPresentationState::Frame &frame = tracked.state.frame();
-		const core::Vec3d pos = tracked.state.position();
-		const Vector3 feet{ static_cast<float>(pos.x),
-			static_cast<float>(pos.y), static_cast<float>(pos.z) };
 
 		// A per-instance override (if decoded successfully) always wins over
 		// the kind's own default visual -- see sync()'s lazy decode above.
@@ -319,9 +508,6 @@ void EntityRenderer::draw(const CameraView &camera_view) const {
 		}
 		const bool has_visual = visual != nullptr;
 
-		if (tracked.hidden) {
-			continue;
-		}
 		if (tracked.item && impl_->chunks != nullptr) {
 			draw_item_cube(feet, impl_->chunks->underwater_tint(*tracked.item),
 					static_cast<float>(id));
@@ -333,10 +519,22 @@ void EntityRenderer::draw(const CameraView &camera_view) const {
 		if (has_visual) {
 			const EntityVisualLayout &layout = visual->layout;
 			texture = visual->texture;
-			const EntityClipLayout &clip =
-					resolve_clip(layout, anim_clip_name(frame.clip));
+			// entity:set_clip() wins over the clip picked from velocity/flags.
+			const std::string_view wanted = tracked.forced_clip
+					? std::string_view(*tracked.forced_clip)
+					: anim_clip_name(frame.clip);
+			const double clip_time = tracked.forced_clip ? tracked.forced_clip_time : frame.clip_time;
+			const EntityClipLayout &clip = resolve_clip(layout, wanted);
+			if (clip.name != wanted) {
+				std::string key = std::to_string(texture.id) + "/" + std::string(wanted);
+				if (impl_->warned_clip_fallbacks.insert(std::move(key)).second) {
+					VB_WARN("render", "entity kind ", static_cast<unsigned>(tracked.kind),
+							": sheet has no '", wanted, "' clip, playing its first clip '",
+							clip.name, "' instead");
+				}
+			}
 			const int frame_in_clip = clip.frames > 0
-					? static_cast<int>(frame.clip_time * static_cast<double>(clip.fps)) % clip.frames
+					? static_cast<int>(clip_time * static_cast<double>(clip.fps)) % clip.frames
 					: 0;
 			const int column = clip.start_frame + frame_in_clip;
 			const int row = frame.pose.pose_index;
@@ -374,6 +572,11 @@ void EntityRenderer::draw(const CameraView &camera_view) const {
 				Vector3{ 0.0f, 1.0f, 0.0f }, size, origin, 0.0f,
 				has_visual ? WHITE : tint_for_entity(id));
 	}
+	rlDrawRenderBatchActive();
+	if (!depth_test) {
+		rlEnableDepthTest();
+	}
+	EndShaderMode();
 }
 
 namespace {
@@ -480,7 +683,7 @@ void EntityRenderer::draw_labels(const CameraView &camera_view) const {
 		if (!tracked.text || tracked.text->value.empty()) {
 			continue;
 		}
-		const core::Vec3d pos = tracked.state.position();
+		const core::Vec3d pos = tracked.render_pos;
 		const Vector3 anchor{ static_cast<float>(pos.x),
 			static_cast<float>(pos.y) + tracked.text->offset_y,
 			static_cast<float>(pos.z) };

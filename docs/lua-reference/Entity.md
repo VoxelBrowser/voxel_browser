@@ -142,3 +142,50 @@ Returns `string|nil`
 ```lua
 if self:get_text() == "Ripe!" then return end
 ```
+
+## Entity:set_clip
+
+`Entity:set_clip(clip)`
+
+context: **runtime**
+
+Server pack VM only. Forces the animation clip every client plays for this entity (any clip its sheet declares, e.g. `"open"`), instead of the one picked from its velocity and on-ground state. Sticky and replicated, including to players who join later; `nil` goes back to the automatic choice.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `clip` | `string|nil` | Clip name (1-64 bytes) or nil. |
+
+```lua
+chest:set_clip("open")
+chest:set_clip(nil)
+```
+
+## Entity:attach_to
+
+`Entity:attach_to(parent, opts)`
+
+context: **runtime**
+
+Server pack VM only. Attaches this entity to another entity or a player: from then on it moves with the parent (every tick on the server, every frame on clients, so it never trails behind) until `detach()`. If the parent despawns or leaves, this entity is removed too (`on_death` cause `"parent_removed"`). `set_pos` has no lasting effect while attached.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `parent` | `Entity|Player` |  |
+| `opts?` | `AttachOptions` |  |
+
+```lua
+local hat = vb.world.spawn("mypack:hat", player:get_pos())
+hat:attach_to(player, { offset = { x = 0, y = 1.9, z = 0 }, layer = 1 })
+```
+
+## Entity:detach
+
+`Entity:detach()`
+
+context: **runtime**
+
+Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op when not attached.
+
+```lua
+hat:detach()
+```
