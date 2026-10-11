@@ -8,6 +8,14 @@
 | --- | --- | --- |
 | `reach?` | `number` | Maximum block interaction distance in blocks. |
 
+## AttachOptions
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `offset?` | `Vec3` | Position relative to the parent's position (default `{x=0, y=0, z=0}`). |
+| `face_offset?` | `boolean` | Turn `offset` with the parent's facing: x = right, z = forward (default false). |
+| `layer?` | `integer` | Overrides the visual's `layer` while attached, -8..8 (e.g. 1 to always draw in front of the parent). |
+
 ## AuthConfig
 
 | Field | Type | Description |
@@ -126,7 +134,8 @@ integer Numeric block id. A held item and a placeable block share one id space.
 | `health?` | `number` | Max health (> 0); enables `entity:get_health()` and auto-despawn at 0. |
 | `width?` | `number` | Footprint width (default 0.8). |
 | `height?` | `number` | Footprint height (default 1.8). |
-| `visual?` | `EntityVisual` | Sprite description. |
+| `visual?` | `EntityVisual|false` | Sprite description; `false` draws no sprite at all (a text-only entity). |
+| `text?` | `EntityText` | Default label style (and optional default `value`) for every instance. |
 | `represents?` | `"player"|"item_drop"` | Render players or dropped items with this kind. |
 | `on_spawn?` | `fun(self:` | Entity) |
 | `on_tick?` | `fun(self:` | Entity, dt: number) |
@@ -136,6 +145,18 @@ integer Numeric block id. A held item and a placeable block share one id space.
 ## EntityKindId
 
 integer Numeric entity kind id (registration order, starting at 1).
+
+## EntityText
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `value?` | `string` | Label text: UTF-8, at most 64 bytes, `\n` starts a new line. Empty hides the label. |
+| `color?` | `integer[]` | Text colour `{r, g, b}` or `{r, g, b, a}`, 0-255 (default white). |
+| `background?` | `integer[]|false` | Rounded panel colour behind the text, RGB(A); without one the text gets a dark outline. |
+| `size?` | `number` | Height of one text line in blocks (default 0.3). |
+| `offset_y?` | `number` | Height of the label's bottom above the entity's position (default the kind's `height` + 0.25; 0 for `visual = false`). |
+| `max_distance?` | `number` | Hide the label beyond this many blocks (default 0 = never). |
+| `through_walls?` | `boolean` | Draw through walls instead of being hidden by them, e.g. name tags (default false). |
 
 ## EntityVisual
 
@@ -147,6 +168,9 @@ integer Numeric entity kind id (registration order, starting at 1).
 | `mirror?` | `boolean` | Flip the authored side pose for the opposite side (default true). |
 | `origin?` | `{x:` | number, y: number} Normalised anchor in a frame (default bottom-centre `{0.5, 1.0}`). |
 | `clips` | `EntityVisualClip[]` | Non-empty animation clip list. |
+| `layer?` | `integer` | Draw order among overlapping sprites, -8..8 (default 0): a higher layer at the same spot always draws in front. |
+| `through_walls?` | `boolean` | Draw over terrain instead of being hidden by it, e.g. markers (default false). |
+| `layers?` | `EntityVisualLayer[]` | Paper-doll sheets drawn in the same billboard as `texture`, in order, with the same frame, facing row and mirroring, so they never drift (max 16). |
 
 ## EntityVisualClip
 
@@ -155,6 +179,15 @@ integer Numeric entity kind id (registration order, starting at 1).
 | `clip` | `string` | Clip name. |
 | `frames` | `integer` | Frame count (> 0). |
 | `fps` | `number` | Frames per second (> 0). |
+
+## EntityVisualLayer
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `texture` | `string` | Pack-relative sheet; must be exactly the size of the base `texture`, or it is skipped with a warning. |
+| `below?` | `boolean` | Draw before (behind) the base sheet instead of over it (default false). |
+| `rows?` | `integer[]` | Only draw on these facing rows of the sheet, 0-7 (default every row), e.g. a cape behind the body on front views and over it on back views. |
+| `tint?` | `integer[]` | `{r, g, b}` or `{r, g, b, a}`, 0-255, multiplied into the sheet (default white), so one greyscale sheet serves many dyes. |
 
 ## FbmDef
 
@@ -298,7 +331,8 @@ integer[] `{r, g, b, a?}`, 0-255 each.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional). |
+| `visual_override?` | `table` | Per-instance override of the kind's `visual` (every field optional, including `layer`, `through_walls` and `layers`). Change it later with `entity:set_visual_override`. |
+| `text?` | `string|EntityText` | World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`. |
 
 ## StructureDef
 

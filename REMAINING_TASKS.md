@@ -172,8 +172,19 @@ Full detail: `remaining_tasks/phase6.md`.
       replicated block damage + crack textures, movement keybinds in the
       registry (6.19), HUD click/change reporting, player list/chat/hotbar
       moved to `ui.define_hud`, opt-in punch cooldown, held item / hotbar
-      selection, unified reach (6.21).
+      selection, unified reach (6.21), entity text labels (protocol 32:
+      `vb.world.spawn{text=}`, `entity:set_text`, `visual = false`
+      text-only kinds), real `on_ground` flags for every entity,
+      `entity:set_clip`, `entity:attach_to`/`detach`, sprite `layer`/
+      `through_walls`, alpha-cutout + back-to-front entity drawing
+      (all `S2C_EntityProps`, protocol 32).
 - [ ] Still open: no swing animation, no PvP armor/knockback.
+- [x] Paper-doll appearance (protocol 32): visual `layers` (below/rows/
+      tint), `player:`/`entity:set_visual_override` at runtime, own outfit
+      via the F5 third-person camera (`vb.render.set_third_person`).
+- [ ] UI `sprite` widget (wardrobe/preview screens) and a
+      `client.my_appearance()` UI binding -- the client side already has
+      `ClientSession::my_visual_override()`.
 
 ---
 

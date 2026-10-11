@@ -144,3 +144,39 @@ TEST_CASE("merge_visual_override overrides mirror independently of everything el
 	CHECK(merged.facings == def.facings); // untouched
 	CHECK(merged.texture == def.texture); // untouched
 }
+
+TEST_CASE("paper-doll layers: row masks and draw order") {
+	using vb::protocol::EntityVisualLayer;
+	CHECK(layer_applies_to_row(0, 0));
+	CHECK(layer_applies_to_row(0, 4));
+	CHECK(layer_applies_to_row(0b0000'0001, 0));
+	CHECK_FALSE(layer_applies_to_row(0b0000'0001, 2));
+	CHECK(layer_applies_to_row(0b0000'0100, 2));
+
+	// One cape sheet listed twice: behind the body on the front row (0),
+	// over it on the back row (2).
+	EntityVisualLayer cape_front{ "cape.png", true, 0b0000'0001, { 255, 255, 255, 255 } };
+	EntityVisualLayer shirt{ "shirt.png", false, 0, { 255, 255, 255, 255 } };
+	EntityVisualLayer cape_back{ "cape.png", false, 0b0000'0100, { 255, 255, 255, 255 } };
+	const std::vector<EntityVisualLayer> layers{ cape_front, shirt, cape_back };
+	CHECK(layer_draw_order(layers, 0) == std::vector<int>{ 0, -1, 1 });
+	CHECK(layer_draw_order(layers, 2) == std::vector<int>{ -1, 1, 2 });
+	CHECK(layer_draw_order(layers, 1) == std::vector<int>{ -1, 1 });
+	CHECK(layer_draw_order({}, 3) == std::vector<int>{ -1 });
+
+	CHECK(layer_sheet_matches(512, 320, 512, 320));
+	CHECK_FALSE(layer_sheet_matches(512, 320, 256, 320));
+}
+
+TEST_CASE("merge_visual_override replaces the kind's layer list only when given") {
+	using vb::protocol::EntityVisualLayer;
+	EntityVisualDef base = make_def();
+	base.layers = { EntityVisualLayer{ "kind_hat.png" } };
+	EntityVisualOverride none;
+	CHECK(merge_visual_override(base, none).layers == base.layers);
+	EntityVisualOverride over;
+	over.layers = std::vector<EntityVisualLayer>{ EntityVisualLayer{ "shirt.png" }, EntityVisualLayer{ "cape.png", true } };
+	CHECK(merge_visual_override(base, over).layers == *over.layers);
+	over.layers = std::vector<EntityVisualLayer>{};
+	CHECK(merge_visual_override(base, over).layers.empty()); // explicit "no layers"
+}

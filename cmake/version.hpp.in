@@ -17,6 +17,6 @@ inline constexpr const char *kBuildTimestamp = "@VB_BUILD_TIMESTAMP@";
 
 // Wire protocol version. Bump on ANY change to a struct in inc/vb/protocol/
 // and update docs/protocol.md in the same commit.
-inline constexpr std::uint16_t kEngineProtocolVersion = 31;
+inline constexpr std::uint16_t kEngineProtocolVersion = 32;
 
 } // namespace vb

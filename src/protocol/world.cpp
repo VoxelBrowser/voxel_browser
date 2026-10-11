@@ -1,6 +1,7 @@
 #include "vb/protocol/world.hpp"
 
 #include "vb/protocol/byte_buffer.hpp"
+#include "visual_layer_codec.hpp"
 
 namespace vb::protocol {
 
@@ -204,6 +205,9 @@ void write_entity_visual(ByteWriter &w, const std::optional<EntityVisualDef> &vi
 		w.u16(c.frames);
 		w.f32(c.fps);
 	}
+	w.i8(visual->layer);
+	w.boolean(visual->through_walls);
+	detail::write_visual_layers(w, visual->layers);
 }
 
 std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
@@ -231,6 +235,9 @@ std::optional<EntityVisualDef> read_entity_visual(ByteReader &r) {
 		c.fps = r.f32();
 		v.clips.push_back(std::move(c));
 	}
+	v.layer = r.i8();
+	v.through_walls = r.boolean();
+	v.layers = detail::read_visual_layers(r);
 	return v;
 }
 
@@ -244,6 +251,7 @@ void S2CEntityKindRegistry::encode(std::vector<std::byte> &out) const {
 		w.f32(k.width);
 		w.f32(k.height);
 		write_entity_visual(w, k.visual);
+		w.boolean(k.hidden);
 	}
 }
 
@@ -262,6 +270,7 @@ Decoded<S2CEntityKindRegistry> S2CEntityKindRegistry::decode(
 		k.width = r.f32();
 		k.height = r.f32();
 		k.visual = read_entity_visual(r);
+		k.hidden = r.boolean();
 		m.kinds.push_back(std::move(k));
 	}
 	return finish(r, std::move(m));

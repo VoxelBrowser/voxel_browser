@@ -55,6 +55,7 @@ enum class MessageType : std::uint16_t {
 
 	// --- snapshot (lane 2) ---
 	kS2CEntitySnapshot = 60,
+	kS2CEntityProps = 61, // protocol v32, lane kFeedback (reliable)
 
 	// --- input (lane 4) ---
 	kC2SInputBatch = 80,
@@ -102,6 +103,7 @@ constexpr Lane lane_for(MessageType type) {
 		case MessageType::kS2CEntityKindRegistry:
 			return Lane::kWorld;
 		case MessageType::kS2CBlockDamage:
+		case MessageType::kS2CEntityProps:
 			return Lane::kFeedback;
 		case MessageType::kS2CEntitySnapshot:
 			return Lane::kSnapshot;

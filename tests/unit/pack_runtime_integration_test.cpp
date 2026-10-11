@@ -1811,6 +1811,506 @@ TEST_CASE("vb.world.spawn rejects a malformed visual_override without "
 	CHECK_FALSE(r);
 }
 
+TEST_CASE("entity text labels: spawn with text, set_text replicates as a "
+		  "delta without respawning, a late joiner sees the current text, "
+		  "nil removes it") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_text"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({
+			name = "test:label",
+			visual = false,
+			text = { size = 0.4, background = { 40, 40, 40, 200 } },
+		})
+	)"));
+	rt.freeze();
+
+	HandshakeServerHost host; // carries the kind registry (hidden flag)
+	rt.install_entity_kind_registry(host);
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg, host);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	std::unique_ptr<ClientSession> b;
+
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+			if (b) {
+				b->tick(0.05);
+			}
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 5, 5, 7 });
+
+	REQUIRE(rt.load_pack_file(R"(
+		label = vb.world.spawn("test:label", { x = 5, y = 5, z = 5 },
+				{ text = { value = "27s", color = { 255, 255, 255 }, offset_y = 0.2 } })
+		assert(label:get_text() == "27s")
+	)"));
+	pump(4);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId id = a.remote_entities().begin()->first;
+	const vb::protocol::EntityKindRegistryRecord *kind =
+			a.entity_kind(a.remote_entities().begin()->second.kind);
+	REQUIRE(kind != nullptr);
+	CHECK(kind->hidden);
+	{
+		const auto *t = a.entity_text(id);
+		REQUIRE(t != nullptr);
+		CHECK(t->value == "27s");
+		CHECK(t->size == doctest::Approx(0.4)); // kind default
+		CHECK(t->offset_y == doctest::Approx(0.2)); // per-spawn field
+		REQUIRE(t->background.has_value());
+		CHECK((*t->background)[3] == 200);
+	}
+
+	// A string keeps the style, a table re-applies the kind style with its
+	// own fields on top; neither respawns the entity.
+	REQUIRE(rt.load_pack_file(R"( label:set_text("26s") )"));
+	pump(2);
+	REQUIRE(a.remote_entities().size() == 1);
+	CHECK(a.remote_entities().begin()->first == id);
+	REQUIRE(a.entity_text(id) != nullptr);
+	CHECK(a.entity_text(id)->value == "26s");
+	CHECK(a.entity_text(id)->offset_y == doctest::Approx(0.2));
+
+	REQUIRE(rt.load_pack_file(R"( label:set_text({ value = "Ripe!", color = { 120, 235, 110 } }) )"));
+	pump(2);
+	REQUIRE(a.entity_text(id) != nullptr);
+	CHECK(a.entity_text(id)->value == "Ripe!");
+	CHECK(a.entity_text(id)->color[1] == 235);
+	CHECK(a.entity_text(id)->color[3] == 255);
+	CHECK(a.entity_text(id)->offset_y == doctest::Approx(0.0)); // hidden kind's default
+
+	// A client that joins later sees the current text, not the first one.
+	Transport &tb = net.create_client();
+	auto idb = tb.connect("x", 0);
+	REQUIRE(idb);
+	b = std::make_unique<ClientSession>(tb, *idb, HandshakeClientConfig{ "B", "", "v", 1 });
+	pump(16);
+	REQUIRE(b->joined());
+	server.set_player_state(b->join_accept()->your_net_id, Vec3d{ 5, 5, 3 });
+	pump(4);
+	REQUIRE(b->entity_text(id) != nullptr);
+	CHECK(b->entity_text(id)->value == "Ripe!");
+
+	REQUIRE(rt.load_pack_file(R"(
+		label:set_text(nil)
+		assert(label:get_text() == nil)
+	)"));
+	pump(2);
+	CHECK(a.entity_text(id) == nullptr);
+	CHECK(b->entity_text(id) == nullptr);
+	CHECK(a.remote_entities().size() == 2); // entity itself still there (+ B)
+
+	// Moving out of interest drops the label client-side; coming back
+	// re-sends it.
+	REQUIRE(rt.load_pack_file(R"( label:set_text("back") )"));
+	pump(2);
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 5000, 5, 7 });
+	pump(3);
+	CHECK(a.entity_text(id) == nullptr);
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 5, 5, 7 });
+	pump(3);
+	REQUIRE(a.entity_text(id) != nullptr);
+	CHECK(a.entity_text(id)->value == "back");
+}
+
+TEST_CASE("entity text labels: over-long text and bad colours are Lua errors") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_text_bad"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({ name = "test:label" })
+	)"));
+	rt.freeze();
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+
+	const auto expect_error = [&](const char *code, const char *needle) {
+		const auto r = rt.load_pack_file(code);
+		CHECK_FALSE(r);
+		CHECK_MESSAGE(r.message.find(needle) != std::string::npos, r.message);
+	};
+	expect_error(R"( vb.world.spawn("test:label", { x = 0, y = 0, z = 0 },
+			{ text = string.rep("x", 65) }) )",
+			"the limit is 64");
+	expect_error(R"( vb.world.spawn("test:label", { x = 0, y = 0, z = 0 },
+			{ text = { value = "hi", color = { 300, 0, 0 } } }) )",
+			"text.color components must be integers in [0, 255]");
+	expect_error(R"( vb.world.spawn("test:label", { x = 0, y = 0, z = 0 },
+			{ text = { value = "hi", background = { 1, 2 } } }) )",
+			"text.background must have 3 or 4 components");
+	expect_error(R"( vb.world.spawn("test:label", { x = 0, y = 0, z = 0 },
+			{ text = "\xff\xfe" }) )",
+			"not valid UTF-8");
+	REQUIRE(rt.load_pack_file(R"(
+		e = vb.world.spawn("test:label", { x = 0, y = 0, z = 0 }, { text = "ok" })
+	)"));
+	expect_error(R"( e:set_text(string.rep("y", 100)) )", "entity:set_text(): text is 100 bytes");
+	expect_error(R"( e:set_text({ value = "a", size = -1 }) )", "text.size must be in");
+	expect_error(R"( e:set_text(42) )", "expected a string, a table or nil");
+	REQUIRE(rt.load_pack_file(R"( assert(e:get_text() == "ok") )"));
+}
+
+TEST_CASE("script entities replicate as grounded; set_clip is sticky, "
+		  "replicated and seen by a late joiner") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_clip"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:probe" })
+	)"));
+	rt.freeze();
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	std::unique_ptr<ClientSession> b;
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+			if (b) {
+				b->tick(0.05);
+			}
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 0.5, 65, 2 });
+
+	REQUIRE(rt.load_pack_file(R"(
+		probe = vb.world.spawn("t:probe", { x = 0.5, y = 65, z = 0.5 })
+	)"));
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId id = a.remote_entities().begin()->first;
+	// No physics: on_ground (bit 0) is set, so a stationary probe plays idle.
+	CHECK((a.remote_entities().begin()->second.flags & 1u) != 0);
+	CHECK(a.entity_clip(id) == nullptr);
+
+	REQUIRE(rt.load_pack_file(R"( probe:set_clip("jump") )"));
+	pump(2);
+	REQUIRE(a.entity_clip(id) != nullptr);
+	CHECK(*a.entity_clip(id) == "jump");
+
+	Transport &tb = net.create_client();
+	auto idb = tb.connect("x", 0);
+	REQUIRE(idb);
+	b = std::make_unique<ClientSession>(tb, *idb, HandshakeClientConfig{ "B", "", "v", 1 });
+	pump(16);
+	REQUIRE(b->joined());
+	server.set_player_state(b->join_accept()->your_net_id, Vec3d{ 2, 65, 0.5 });
+	pump(3);
+	REQUIRE(b->entity_clip(id) != nullptr);
+	CHECK(*b->entity_clip(id) == "jump");
+
+	REQUIRE(rt.load_pack_file(R"( probe:set_clip(nil) )"));
+	pump(2);
+	CHECK(a.entity_clip(id) == nullptr);
+	CHECK(b->entity_clip(id) == nullptr);
+
+	const auto bad = rt.load_pack_file(R"( probe:set_clip("") )");
+	CHECK_FALSE(bad);
+	CHECK(bad.message.find("clip name must be") != std::string::npos);
+}
+
+TEST_CASE("attach_to: the child follows its parent on the server and the "
+		  "client learns the link; it is despawned when the parent goes") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_attach"));
+	REQUIRE(rt.load_pack_file(R"(
+		deaths = {}
+		vb.register_entity({
+			name = "t:hat",
+			on_death = function(self, cause) deaths[#deaths + 1] = cause end,
+		})
+		vb.register_entity({ name = "t:npc" })
+		vb.on("chat", function(player, text)
+			if text == "hat" then
+				hat = vb.world.spawn("t:hat", player:get_pos())
+				hat:attach_to(player, { offset = { x = 0, y = 1.9, z = 0 }, layer = 1 })
+			end
+			return true
+		end)
+	)"));
+	rt.freeze();
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	const NetId me = a.join_accept()->your_net_id;
+	server.set_player_state(me, Vec3d{ 10, 65, 10 });
+
+	a.send_chat("hat");
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId hat = a.remote_entities().begin()->first;
+	const auto *link = a.entity_attachment(hat);
+	REQUIRE(link != nullptr);
+	CHECK(link->parent == me);
+	CHECK(static_cast<double>(link->offset.y) == doctest::Approx(1.9));
+	REQUIRE(link->layer.has_value());
+	CHECK(*link->layer == 1);
+
+	// The player walks; the hat goes with it, server-side too.
+	server.set_player_state(me, Vec3d{ 14, 66, 10 });
+	pump(2);
+	REQUIRE(rt.load_pack_file(R"(
+		local p = hat:get_pos()
+		assert(math.abs(p.x - 14) < 1e-6 and math.abs(p.y - 67.9) < 1e-6, p.x .. "," .. p.y)
+	)"));
+	CHECK(a.remote_entities().at(hat).pos.x == doctest::Approx(14.0));
+
+	// Chain: an npc carries a second hat; removing the npc removes the hat.
+	REQUIRE(rt.load_pack_file(R"(
+		npc = vb.world.spawn("t:npc", { x = 12, y = 65, z = 10 })
+		hat2 = vb.world.spawn("t:hat", { x = 12, y = 65, z = 10 })
+		hat2:attach_to(npc, { offset = { y = 2 } })
+		local ok, err = pcall(function() npc:attach_to(hat2) end)
+		assert(not ok and tostring(err):find("cycle"), tostring(err))
+		ok, err = pcall(function() npc:attach_to(npc) end)
+		assert(not ok and tostring(err):find("itself"), tostring(err))
+		ok, err = pcall(function() hat2:attach_to(npc, { layer = 9 }) end)
+		assert(not ok and tostring(err):find("%[%-8, 8%]"), tostring(err))
+	)"));
+	pump(2);
+	CHECK(a.remote_entities().size() == 3);
+	REQUIRE(rt.load_pack_file(R"( npc:remove("test") )"));
+	pump(3);
+	CHECK(a.remote_entities().size() == 1);
+	REQUIRE(rt.load_pack_file(R"(
+		assert(#deaths == 1 and deaths[1] == "parent_removed", tostring(deaths[1]))
+	)"));
+
+	// detach: the hat stays where it is and stops following.
+	REQUIRE(rt.load_pack_file(R"( hat:detach() )"));
+	pump(2);
+	CHECK(a.entity_attachment(hat) == nullptr);
+	server.set_player_state(me, Vec3d{ 20, 66, 10 });
+	pump(2);
+	REQUIRE(rt.load_pack_file(R"(
+		assert(math.abs(hat:get_pos().x - 14) < 1e-6)
+	)"));
+}
+
+TEST_CASE("visual layer / through_walls are validated") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_layer_bad"));
+	const auto r = rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:aura", visual = {
+			variant = "small", texture = "t.png", layer = 1.5,
+			clips = { { clip = "idle", frames = 1, fps = 1 } } } })
+	)");
+	CHECK_FALSE(r);
+	CHECK(r.message.find("visual.layer must be an integer in [-8, 8]") != std::string::npos);
+	REQUIRE(rt.load_pack_file(R"(
+		vb.register_entity({ name = "t:ok", visual = {
+			variant = "small", texture = "t.png", layer = -1, through_walls = true,
+			clips = { { clip = "idle", frames = 1, fps = 1 } } } })
+	)"));
+}
+
+TEST_CASE("player:set_visual_override replicates a paper-doll outfit to "
+		  "other players, to the player themselves and to late joiners, and "
+		  "can change or clear it at runtime") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("player_outfit"));
+	REQUIRE(rt.load_pack_file(R"(
+		vb.render.set_third_person(false)
+		vb.on("chat", function(player, text)
+			if text == "red" then
+				player:set_visual_override({ layers = {
+					{ texture = "textures/cape.png", below = true, rows = { 0 } },
+					{ texture = "textures/shirt_red.png" },
+					{ texture = "textures/hat_straw.png", tint = { 200, 60, 60 } },
+				} })
+			elseif text == "blue" then
+				player:set_visual_override({ layers = { { texture = "textures/shirt_blue.png" } } })
+			elseif text == "none" then
+				player:set_visual_override(nil)
+			end
+			return true
+		end)
+	)"));
+	rt.freeze();
+	CHECK_FALSE(rt.third_person_allowed());
+	CHECK_FALSE(rt.load_pack_file(R"( vb.render.set_third_person(true) )"));
+
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	cfg.third_person_allowed = rt.third_person_allowed();
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+
+	std::vector<std::unique_ptr<ClientSession>> clients;
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			for (auto &c : clients) {
+				c->tick(0.05);
+			}
+		}
+	};
+	auto join = [&](const char *name, Vec3d pos) -> ClientSession & {
+		Transport &t = net.create_client();
+		auto id = t.connect("x", 0);
+		REQUIRE(id);
+		clients.push_back(std::make_unique<ClientSession>(t, *id, HandshakeClientConfig{ name, "", "v", 1 }));
+		pump(16);
+		REQUIRE(clients.back()->joined());
+		server.set_player_state(clients.back()->join_accept()->your_net_id, pos);
+		pump(2);
+		return *clients.back();
+	};
+	ClientSession &a = join("A", Vec3d{ 0, 65, 0 });
+	ClientSession &b = join("B", Vec3d{ 3, 65, 0 });
+	REQUIRE(a.server_info());
+	CHECK_FALSE(a.server_info()->third_person_allowed);
+	const NetId a_id = a.join_accept()->your_net_id;
+	REQUIRE(b.remote_entities().count(a_id) == 1);
+
+	a.send_chat("red");
+	pump(3);
+	for (const auto *ov : { b.entity_visual_override(a_id), a.my_visual_override() }) {
+		REQUIRE(ov != nullptr);
+		REQUIRE(ov->layers.has_value());
+		REQUIRE(ov->layers->size() == 3);
+		CHECK((*ov->layers)[0].below);
+		CHECK((*ov->layers)[0].rows == 0b0000'0001);
+		CHECK((*ov->layers)[1].texture == "textures/shirt_red.png");
+		CHECK((*ov->layers)[2].tint[1] == 60);
+	}
+
+	a.send_chat("blue");
+	pump(3);
+	REQUIRE(b.entity_visual_override(a_id) != nullptr);
+	CHECK((*b.entity_visual_override(a_id)->layers)[0].texture == "textures/shirt_blue.png");
+	REQUIRE(a.my_visual_override() != nullptr);
+	CHECK(a.my_visual_override()->layers->size() == 1);
+
+	ClientSession &c = join("C", Vec3d{ 0, 65, 3 });
+	pump(2);
+	REQUIRE(c.entity_visual_override(a_id) != nullptr);
+	CHECK((*c.entity_visual_override(a_id)->layers)[0].texture == "textures/shirt_blue.png");
+	CHECK(c.entity_visual_override(b.join_accept()->your_net_id) == nullptr); // B never dressed
+
+	a.send_chat("none");
+	pump(3);
+	CHECK(b.entity_visual_override(a_id) == nullptr);
+	CHECK(c.entity_visual_override(a_id) == nullptr);
+	CHECK(a.my_visual_override() == nullptr);
+}
+
+TEST_CASE("entity:set_visual_override changes a script entity's look at "
+		  "runtime; malformed layers are Lua errors") {
+	LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_outfit"));
+	REQUIRE(rt.load_pack_file(R"( vb.register_entity({ name = "t:npc" }) )"));
+	rt.freeze();
+	HandshakeServerConfig cfg;
+	cfg.world_seed = 7;
+	ServerSession server(net.server(), cfg);
+	rt.attach_session(server);
+	REQUIRE(net.server().listen(0));
+	Transport &ta = net.create_client();
+	auto ida = ta.connect("x", 0);
+	REQUIRE(ida);
+	ClientSession a(ta, *ida, HandshakeClientConfig{ "A", "", "v", 1 });
+	auto pump = [&](int n) {
+		for (int i = 0; i < n; ++i) {
+			server.tick(0.05);
+			a.tick(0.05);
+		}
+	};
+	pump(16);
+	REQUIRE(a.joined());
+	server.set_player_state(a.join_accept()->your_net_id, Vec3d{ 0, 65, 2 });
+
+	REQUIRE(rt.load_pack_file(R"(
+		npc = vb.world.spawn("t:npc", { x = 0, y = 65, z = 0 },
+				{ visual_override = { texture = "textures/npc.png" } })
+	)"));
+	pump(3);
+	REQUIRE(a.remote_entities().size() == 1);
+	const NetId id = a.remote_entities().begin()->first;
+	REQUIRE(a.entity_visual_override(id) != nullptr);
+	CHECK(*a.entity_visual_override(id)->texture == "textures/npc.png");
+
+	REQUIRE(rt.load_pack_file(R"(
+		npc:set_visual_override({ texture = "textures/npc.png", layers = { { texture = "textures/apron.png" } } })
+	)"));
+	pump(2);
+	REQUIRE(a.entity_visual_override(id)->layers.has_value());
+	CHECK((*a.entity_visual_override(id)->layers)[0].texture == "textures/apron.png");
+	CHECK(a.remote_entities().begin()->first == id); // same entity, no respawn
+
+	REQUIRE(rt.load_pack_file(R"( npc:set_visual_override(nil) )"));
+	pump(2);
+	CHECK(a.entity_visual_override(id) == nullptr);
+
+	const auto expect_error = [&](const char *code, const char *needle) {
+		const auto r = rt.load_pack_file(code);
+		CHECK_FALSE(r);
+		CHECK_MESSAGE(r.message.find(needle) != std::string::npos, r.message);
+	};
+	expect_error(R"( npc:set_visual_override({ layers = { { below = true } } }) )",
+			"visual_override: layers[1].texture is required");
+	expect_error(R"( npc:set_visual_override({ layers = { { texture = "x.png", rows = { 9 } } } }) )",
+			"rows entries must be integers in [0, 7]");
+	expect_error(R"( npc:set_visual_override({ layers = { { texture = "x.png", tint = { 1, 2 } } } }) )",
+			"layers[1].tint must have 3 or 4 components");
+	expect_error(R"( npc:set_visual_override(5) )", "expected a table or nil");
+}
+
 TEST_CASE("region_enter/region_exit (Phase 7.3): fires once per crossing, "
 		  "not per tick spent inside, and passes the block's registered name") {
 	LoopbackNetwork net;

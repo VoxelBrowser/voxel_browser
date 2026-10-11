@@ -98,4 +98,5 @@ Returns `Entity`
 
 ```lua
 local slime = vb.world.spawn("mypack:slime", {x=0,y=70,z=0})
+local sign = vb.world.spawn("mypack:label", {x=0,y=70,z=0}, { text = { value = "27s", size = 0.4 } })
 ```

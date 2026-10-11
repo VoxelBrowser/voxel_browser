@@ -33,6 +33,9 @@ void PackRuntime::install_entity_kind_registry(net::HandshakeServerHost &) {}
 void PackRuntime::attach_world(net::WorldReplicator &) {}
 void PackRuntime::attach_session(net::ServerSession &) {}
 void PackRuntime::set_server_config(const core::ServerConfig &) {}
+bool PackRuntime::third_person_allowed() const {
+	return true;
+}
 void PackRuntime::set_pack_modules(std::unordered_map<std::string, std::string>) {}
 physics::MoveParams PackRuntime::effective_move_params(physics::MoveParams base) const {
 	return base;
@@ -87,6 +90,7 @@ std::vector<std::string> PackRuntime::global_names() { return {}; }
 #else
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <fstream>
 #include <set>
@@ -367,6 +371,82 @@ const std::pair<std::uint16_t, std::uint16_t> *entity_visual_variant(const std::
 // side; the real PNG's pixel dimensions are validated client-side against
 // this def by render::build_entity_visual_layout() once the texture is
 // actually decoded.
+// `layer` in a visual / visual_override / attach_to table: an integer in
+// [-8, 8] (see protocol::EntityVisualDef::layer).
+std::int8_t parse_layer(const std::string &where, const sol::object &obj) {
+	if (obj.get_type() != sol::type::number) {
+		throw sol::error(where + " must be an integer in [-8, 8]");
+	}
+	const double v = obj.as<double>();
+	if (!(v >= -8.0 && v <= 8.0) || v != std::floor(v)) {
+		throw sol::error(where + " must be an integer in [-8, 8]");
+	}
+	return static_cast<std::int8_t>(v);
+}
+
+bool parse_bool(const std::string &where, const sol::object &obj) {
+	if (obj.get_type() != sol::type::boolean) {
+		throw sol::error(where + " must be a boolean");
+	}
+	return obj.as<bool>();
+}
+
+std::array<std::uint8_t, 4> parse_rgba(const std::string &where, const sol::object &obj);
+
+// `layers = { {texture=, below=, rows={...}, tint={r,g,b[,a]}}, ... }` in a
+// visual or visual_override (protocol::EntityVisualLayer).
+std::vector<protocol::EntityVisualLayer> parse_visual_layers(const std::string &where,
+		const sol::object &obj) {
+	if (obj.get_type() != sol::type::table) {
+		throw sol::error(where + " must be an array of layer tables");
+	}
+	const sol::table arr = obj.as<sol::table>();
+	if (arr.size() > protocol::kMaxEntityVisualLayers) {
+		throw sol::error(where + " can have at most " +
+				std::to_string(protocol::kMaxEntityVisualLayers) + " entries");
+	}
+	std::vector<protocol::EntityVisualLayer> out;
+	for (std::size_t i = 1; i <= arr.size(); ++i) {
+		const std::string at = where + "[" + std::to_string(i) + "]";
+		const sol::object entry = arr[i];
+		if (entry.get_type() != sol::type::table) {
+			throw sol::error(at + " must be a table");
+		}
+		const sol::table t = entry.as<sol::table>();
+		protocol::EntityVisualLayer l;
+		const sol::object tex = t["texture"];
+		if (tex.get_type() != sol::type::string || tex.as<std::string>().empty()) {
+			throw sol::error(at + ".texture is required");
+		}
+		l.texture = tex.as<std::string>();
+		if (const sol::object v = t["below"]; v.get_type() != sol::type::lua_nil) {
+			l.below = parse_bool(at + ".below", v);
+		}
+		if (const sol::object v = t["rows"]; v.get_type() != sol::type::lua_nil) {
+			if (v.get_type() != sol::type::table) {
+				throw sol::error(at + ".rows must be an array of row numbers (0-7)");
+			}
+			const sol::table rows = v.as<sol::table>();
+			for (std::size_t k = 1; k <= rows.size(); ++k) {
+				const sol::object r = rows[k];
+				const double d = r.get_type() == sol::type::number ? r.as<double>() : -1.0;
+				if (!(d >= 0.0 && d <= 7.0) || d != std::floor(d)) {
+					throw sol::error(at + ".rows entries must be integers in [0, 7]");
+				}
+				l.rows = static_cast<std::uint8_t>(l.rows | (1u << static_cast<unsigned>(d)));
+			}
+			if (l.rows == 0) {
+				throw sol::error(at + ".rows must not be empty (omit it for every row)");
+			}
+		}
+		if (const sol::object v = t["tint"]; v.get_type() != sol::type::lua_nil) {
+			l.tint = parse_rgba(at + ".tint", v);
+		}
+		out.push_back(std::move(l));
+	}
+	return out;
+}
+
 protocol::EntityVisualDef parse_entity_visual(const sol::table &t) {
 	const std::string variant_name = t.get_or("variant", std::string{});
 	const auto *variant = entity_visual_variant(variant_name);
@@ -422,6 +502,15 @@ protocol::EntityVisualDef parse_entity_visual(const sol::table &t) {
 			throw sol::error("vb.register_entity: visual.clips['" + clip_name + "'].fps must be positive");
 		}
 		visual.clips.push_back({ clip_name, static_cast<std::uint16_t>(frames), fps });
+	}
+	if (const sol::object v = t["layer"]; v.get_type() != sol::type::lua_nil) {
+		visual.layer = parse_layer("vb.register_entity: visual.layer", v);
+	}
+	if (const sol::object v = t["through_walls"]; v.get_type() != sol::type::lua_nil) {
+		visual.through_walls = parse_bool("vb.register_entity: visual.through_walls", v);
+	}
+	if (const sol::object v = t["layers"]; v.get_type() != sol::type::lua_nil) {
+		visual.layers = parse_visual_layers("vb.register_entity: visual.layers", v);
 	}
 	return visual;
 }
@@ -502,7 +591,165 @@ protocol::EntityVisualOverride parse_entity_visual_override(const sol::table &t)
 		}
 		out.clips = std::move(clips);
 	}
+	if (const sol::object v = t["layer"]; v.get_type() != sol::type::lua_nil) {
+		out.layer = parse_layer("visual_override: layer", v);
+	}
+	if (const sol::object v = t["through_walls"]; v.get_type() != sol::type::lua_nil) {
+		out.through_walls = parse_bool("visual_override: through_walls", v);
+	}
+	if (const sol::object v = t["layers"]; v.get_type() != sol::type::lua_nil) {
+		out.layers = parse_visual_layers("visual_override: layers", v);
+	}
 	return out;
+}
+
+// --- entity text labels (vb.world.spawn's `text`, entity:set_text) --------
+
+bool is_valid_utf8(std::string_view s) {
+	std::size_t i = 0;
+	while (i < s.size()) {
+		const auto c = static_cast<unsigned char>(s[i]);
+		std::size_t len = 0;
+		std::uint32_t cp = 0;
+		if (c < 0x80) {
+			++i;
+			continue;
+		} else if ((c & 0xE0) == 0xC0) {
+			len = 2;
+			cp = c & 0x1F;
+		} else if ((c & 0xF0) == 0xE0) {
+			len = 3;
+			cp = c & 0x0F;
+		} else if ((c & 0xF8) == 0xF0) {
+			len = 4;
+			cp = c & 0x07;
+		} else {
+			return false;
+		}
+		if (i + len > s.size()) {
+			return false;
+		}
+		for (std::size_t k = 1; k < len; ++k) {
+			const auto cc = static_cast<unsigned char>(s[i + k]);
+			if ((cc & 0xC0) != 0x80) {
+				return false;
+			}
+			cp = (cp << 6) | (cc & 0x3F);
+		}
+		// Reject overlong encodings, surrogates and out-of-range code points.
+		if ((len == 2 && cp < 0x80) || (len == 3 && cp < 0x800) ||
+				(len == 4 && cp < 0x10000) || cp > 0x10FFFF ||
+				(cp >= 0xD800 && cp <= 0xDFFF)) {
+			return false;
+		}
+		i += len;
+	}
+	return true;
+}
+
+std::string check_text_value(const std::string &context, std::string value) {
+	if (value.size() > protocol::kMaxEntityTextBytes) {
+		throw sol::error(context + ": text is " + std::to_string(value.size()) +
+				" bytes; the limit is " + std::to_string(protocol::kMaxEntityTextBytes));
+	}
+	if (!is_valid_utf8(value)) {
+		throw sol::error(context + ": text is not valid UTF-8");
+	}
+	return value;
+}
+
+// `{r, g, b}` or `{r, g, b, a}`, each an integer in [0, 255].
+std::array<std::uint8_t, 4> parse_rgba(const std::string &where, const sol::object &obj) {
+	if (obj.get_type() != sol::type::table) {
+		throw sol::error(where + " must be {r, g, b} or {r, g, b, a}");
+	}
+	const sol::table t = obj.as<sol::table>();
+	const std::size_t n = t.size();
+	if (n != 3 && n != 4) {
+		throw sol::error(where + " must have 3 or 4 components, got " + std::to_string(n));
+	}
+	std::array<std::uint8_t, 4> out{ 0, 0, 0, 255 };
+	for (std::size_t i = 1; i <= n; ++i) {
+		const sol::object c = t[i];
+		if (c.get_type() != sol::type::number) {
+			throw sol::error(where + " components must be numbers");
+		}
+		const double v = c.as<double>();
+		if (!(v >= 0.0 && v <= 255.0) || v != std::floor(v)) {
+			throw sol::error(where + " components must be integers in [0, 255]");
+		}
+		out[i - 1] = static_cast<std::uint8_t>(v);
+	}
+	return out;
+}
+
+std::array<std::uint8_t, 4> parse_text_rgba(const std::string &context,
+		const char *field, const sol::object &obj) {
+	return parse_rgba(context + ": text." + field, obj);
+}
+
+float parse_text_number(const std::string &context, const char *field,
+		const sol::object &obj, float min, float max, bool min_exclusive) {
+	const std::string where = context + ": text." + field;
+	if (obj.get_type() != sol::type::number) {
+		throw sol::error(where + " must be a number");
+	}
+	const double v = obj.as<double>();
+	const double lo = static_cast<double>(min);
+	const double hi = static_cast<double>(max);
+	if (!std::isfinite(v) || v > hi || v < lo || (min_exclusive && v == lo)) {
+		throw sol::error(where + " must be in " + (min_exclusive ? "(" : "[") +
+				std::to_string(min) + ", " + std::to_string(max) + "]");
+	}
+	return static_cast<float>(v);
+}
+
+// Applies a `text = {...}` table's fields over `base`, validating each one
+// that is present. `value` is left as `base.value` when the table omits it.
+// A non-table, non-string `obj` is rejected; a plain string sets only the
+// value, keeping every style field of `base`.
+protocol::EntityText parse_entity_text(const std::string &context,
+		const sol::object &obj, protocol::EntityText base) {
+	if (obj.get_type() == sol::type::string) {
+		base.value = check_text_value(context, obj.as<std::string>());
+		return base;
+	}
+	if (obj.get_type() != sol::type::table) {
+		throw sol::error(context + ": text must be a string or a table");
+	}
+	const sol::table t = obj.as<sol::table>();
+	if (const sol::object v = t["value"]; v.get_type() != sol::type::lua_nil) {
+		if (v.get_type() != sol::type::string) {
+			throw sol::error(context + ": text.value must be a string");
+		}
+		base.value = check_text_value(context, v.as<std::string>());
+	}
+	if (const sol::object v = t["color"]; v.get_type() != sol::type::lua_nil) {
+		base.color = parse_text_rgba(context, "color", v);
+	}
+	if (const sol::object v = t["background"]; v.get_type() != sol::type::lua_nil) {
+		if (v.get_type() == sol::type::boolean && !v.as<bool>()) {
+			base.background.reset(); // `background = false` turns an inherited panel off
+		} else {
+			base.background = parse_text_rgba(context, "background", v);
+		}
+	}
+	if (const sol::object v = t["size"]; v.get_type() != sol::type::lua_nil) {
+		base.size = parse_text_number(context, "size", v, 0.0f, 16.0f, true);
+	}
+	if (const sol::object v = t["offset_y"]; v.get_type() != sol::type::lua_nil) {
+		base.offset_y = parse_text_number(context, "offset_y", v, -64.0f, 64.0f, false);
+	}
+	if (const sol::object v = t["max_distance"]; v.get_type() != sol::type::lua_nil) {
+		base.max_distance = parse_text_number(context, "max_distance", v, 0.0f, 1024.0f, false);
+	}
+	if (const sol::object v = t["through_walls"]; v.get_type() != sol::type::lua_nil) {
+		if (v.get_type() != sol::type::boolean) {
+			throw sol::error(context + ": text.through_walls must be a boolean");
+		}
+		base.through_walls = v.as<bool>();
+	}
+	return base;
 }
 
 } // namespace
@@ -549,6 +796,13 @@ struct EntityKindDef {
 	// protocol::EntityKindRegistryRecord::visual by
 	// install_entity_kind_registry().
 	std::optional<protocol::EntityVisualDef> visual;
+	// `vb.register_entity{visual = false}`: no sprite or placeholder quad,
+	// for a text-only kind (protocol::EntityKindRegistryRecord::hidden).
+	bool hidden = false;
+	// `vb.register_entity{text = {...}}`: the style (and optional default
+	// value) every instance's label starts from. Its offset_y defaults to
+	// just above the kind's height (0 for a hidden kind).
+	protocol::EntityText text_style;
 };
 
 // Phase 6.1: one spawned `vb.world.spawn(kind, pos)` instance. `self` is a
@@ -576,6 +830,12 @@ struct ScriptEntity {
 	// kind, so entity:damage()/get_health() can tell "not tracked" apart
 	// from "tracked and at 0" (which is mid-despawn, not a valid steady state).
 	std::optional<float> health;
+	// The label this instance currently shows (already sent to
+	// ServerSession::set_script_entity_text); nullopt = none.
+	std::optional<protocol::EntityText> text;
+	// entity:attach_to's parent link (mirrors ServerSession's copy), kept here
+	// so attach_to can reject a cycle.
+	std::optional<protocol::EntityAttachment> attach;
 };
 
 struct BiomeDef {
@@ -663,6 +923,9 @@ struct PackRuntime::Impl {
 	// a pack ever calls it -- same "capture the table, parse lazily" posture
 	// as move_params_table/day_night_curve_table above.
 	std::optional<sol::table> fog_params_table;
+	// vb.render.set_third_person(allowed): sent to clients as
+	// S2CServerInfo::third_person_allowed.
+	bool third_person_allowed = true;
 
 	// Phase 6.13: the operator's ServerConfig, if set_server_config() was ever
 	// called (real servers call it; --singleplayer's in-process PackRuntime
@@ -978,6 +1241,25 @@ struct PlayerHandle {
 	// range or empty -- resolves get_selected_slot() against this player's
 	// actual inventory (the engine has no idea a "hotbar" exists, only a
 	// selected index; a pack decides what holding an empty slot means).
+	// player:set_visual_override(t|nil): this player's appearance (layers =
+	// clothing, a different texture, ...) on every client, including their
+	// own third-person view. Lasts until changed or the player leaves.
+	void set_visual_override(sol::object arg) const {
+		if (rt->session == nullptr) {
+			throw sol::error("player:set_visual_override(): session not attached yet");
+		}
+		std::optional<protocol::EntityVisualOverride> ov;
+		if (arg.get_type() == sol::type::table) {
+			ov = parse_entity_visual_override(arg.as<sol::table>());
+		} else if (arg.get_type() != sol::type::lua_nil) {
+			throw sol::error("player:set_visual_override(): expected a table or nil");
+		}
+		if (!rt->session->player_move_state(net_id)) {
+			throw sol::error("player:set_visual_override(): player is not in the game");
+		}
+		rt->session->set_script_entity_visual_override(net_id, std::move(ov));
+	}
+
 	sol::object get_held_item(sol::this_state ts) const {
 		sol::state_view lua(ts);
 		const std::vector<ecs::ItemStack> &slots = rt->inventories[net_id].slots;
@@ -1285,7 +1567,8 @@ void PackRuntime::Impl::install_bindings() {
 			&PlayerHandle::get_selected_slot, "get_held_item",
 			&PlayerHandle::get_held_item, "get_hunger", &PlayerHandle::get_hunger,
 			"add_hunger", &PlayerHandle::add_hunger, "get_health",
-			&PlayerHandle::get_health);
+			&PlayerHandle::get_health, "set_visual_override",
+			&PlayerHandle::set_visual_override);
 
 	sol::table vb = lua.create_named_table("vb");
 
@@ -1354,9 +1637,21 @@ void PackRuntime::Impl::install_bindings() {
 		if (health) {
 			e.max_health = *health;
 		}
-		const sol::optional<sol::table> visual_table = def["visual"];
-		if (visual_table) {
-			e.visual = parse_entity_visual(*visual_table);
+		const sol::object visual_obj = def["visual"];
+		if (visual_obj.get_type() == sol::type::boolean && !visual_obj.as<bool>()) {
+			e.hidden = true;
+		} else if (visual_obj.get_type() == sol::type::table) {
+			e.visual = parse_entity_visual(visual_obj.as<sol::table>());
+		} else if (visual_obj.get_type() != sol::type::lua_nil) {
+			throw sol::error("vb.register_entity: 'visual' must be a table or false");
+		}
+		e.text_style.offset_y = e.hidden ? 0.0f : e.height + 0.25f;
+		if (const sol::object text_obj = def["text"];
+				text_obj.get_type() != sol::type::lua_nil) {
+			if (text_obj.get_type() != sol::type::table) {
+				throw sol::error("vb.register_entity: 'text' must be a table");
+			}
+			e.text_style = parse_entity_text("vb.register_entity", text_obj, e.text_style);
 		}
 		const sol::optional<std::string> represents = def["represents"];
 		if (represents) {
@@ -1625,6 +1920,14 @@ void PackRuntime::Impl::install_bindings() {
 	// submerged liquid block.
 	sol::table render_tbl = lua.create_table();
 	vb["render"] = render_tbl;
+	// Whether players may switch to the third-person camera (F5), e.g. to see
+	// their own outfit. Load time only, like set_fog.
+	render_tbl["set_third_person"] = [this](bool allowed) {
+		if (frozen) {
+			throw sol::error("vb.render.set_third_person: registry already frozen");
+		}
+		third_person_allowed = allowed;
+	};
 	render_tbl["set_fog"] = [this](sol::table def) {
 		if (frozen) {
 			throw sol::error("vb.render.set_fog: registry already frozen");
@@ -1874,6 +2177,12 @@ void PackRuntime::Impl::install_bindings() {
 		if (it == entities.end()) {
 			throw sol::error("entity:get_pos(): entity is gone");
 		}
+		// An attached entity is moved by ServerSession every tick.
+		if (session != nullptr) {
+			if (const auto p = session->script_entity_pos(it->first)) {
+				it->second.pos = *p;
+			}
+		}
 		sol::table t = sv.create_table();
 		t["x"] = it->second.pos.x;
 		t["y"] = it->second.pos.y;
@@ -1943,6 +2252,174 @@ void PackRuntime::Impl::install_bindings() {
 			despawn_entity(id, "set_health");
 		}
 	};
+	// World-space label: a string changes only the value (keeping the current
+	// style, or the kind's if there is no label yet); a table re-applies the
+	// kind's style with its own fields on top (an omitted `value` keeps the
+	// current text); nil or "" removes the label. Replicated as a small
+	// S2C_EntityProps delta -- the entity keeps its net id.
+	entity_methods["set_text"] = [this](sol::table self, sol::object arg) {
+		const core::NetId id = self_net_id(self);
+		const auto it = entities.find(id);
+		if (it == entities.end()) {
+			throw sol::error("entity:set_text(): entity is gone");
+		}
+		const EntityKindDef &kind = entity_kinds[it->second.kind_index];
+		std::optional<protocol::EntityText> text;
+		if (arg.get_type() == sol::type::string) {
+			text = parse_entity_text("entity:set_text()", arg,
+					it->second.text.value_or(kind.text_style));
+		} else if (arg.get_type() == sol::type::table) {
+			protocol::EntityText base = kind.text_style;
+			if (it->second.text) {
+				base.value = it->second.text->value;
+			}
+			text = parse_entity_text("entity:set_text()", arg, std::move(base));
+		} else if (arg.get_type() != sol::type::lua_nil) {
+			throw sol::error("entity:set_text(): expected a string, a table or nil");
+		}
+		if (text && text->value.empty()) {
+			text.reset();
+		}
+		it->second.text = text;
+		if (session != nullptr) {
+			session->set_script_entity_text(id, std::move(text));
+		}
+	};
+	// Forces the animation clip every client plays for this entity (any name
+	// its sheet declares, e.g. "open"); nil returns to the automatic choice
+	// from velocity/on_ground. Sticky and replicated like set_text.
+	entity_methods["set_clip"] = [this](sol::table self, sol::object arg) {
+		const core::NetId id = self_net_id(self);
+		if (entities.find(id) == entities.end()) {
+			throw sol::error("entity:set_clip(): entity is gone");
+		}
+		std::optional<std::string> clip;
+		if (arg.get_type() == sol::type::string) {
+			clip = arg.as<std::string>();
+			if (clip->empty() || clip->size() > protocol::kMaxEntityClipNameBytes) {
+				throw sol::error("entity:set_clip(): clip name must be 1-" +
+						std::to_string(protocol::kMaxEntityClipNameBytes) + " bytes");
+			}
+		} else if (arg.get_type() != sol::type::lua_nil) {
+			throw sol::error("entity:set_clip(): expected a clip name or nil");
+		}
+		if (session != nullptr) {
+			session->set_script_entity_clip(id, std::move(clip));
+		}
+	};
+	// Glues this entity to `parent` (another entity, or a player): it then
+	// follows the parent every tick on the server and every frame on clients
+	// (no trailing). Despawned with cause "parent_removed" when the parent
+	// goes away. opts: offset = {x, y, z} (default 0), face_offset = bool
+	// (turn the offset with the parent's facing), layer = -8..8 (overrides
+	// the visual's layer while attached).
+	entity_methods["attach_to"] = [this](sol::table self, sol::object parent,
+										  sol::optional<sol::table> opts) {
+		const core::NetId id = self_net_id(self);
+		const auto it = entities.find(id);
+		if (it == entities.end()) {
+			throw sol::error("entity:attach_to(): entity is gone");
+		}
+		protocol::EntityAttachment a;
+		if (parent.is<PlayerHandle>()) {
+			a.parent = parent.as<PlayerHandle &>().net_id;
+			if (session == nullptr || !session->player_move_state(a.parent)) {
+				throw sol::error("entity:attach_to(): that player is not in the game");
+			}
+		} else if (parent.get_type() == sol::type::table) {
+			a.parent = self_net_id(parent.as<sol::table>());
+			if (entities.find(a.parent) == entities.end()) {
+				throw sol::error("entity:attach_to(): parent entity is gone");
+			}
+			if (a.parent == id) {
+				throw sol::error("entity:attach_to(): an entity can't attach to itself");
+			}
+			// Walk up the parent's chain: attaching to a descendant is a cycle.
+			core::NetId cur = a.parent;
+			for (int depth = 0; depth < 64; ++depth) {
+				const auto p = entities.find(cur);
+				if (p == entities.end() || !p->second.attach) {
+					break;
+				}
+				cur = p->second.attach->parent;
+				if (cur == id) {
+					throw sol::error("entity:attach_to(): that would make an attachment cycle");
+				}
+			}
+		} else {
+			throw sol::error("entity:attach_to(): parent must be an entity or a player");
+		}
+		if (opts) {
+			if (const sol::object off = (*opts)["offset"]; off.get_type() != sol::type::lua_nil) {
+				if (off.get_type() != sol::type::table) {
+					throw sol::error("entity:attach_to(): offset must be {x=, y=, z=}");
+				}
+				const sol::table t = off.as<sol::table>();
+				const auto axis = [&](const char *k) {
+					const sol::object v = t[k];
+					if (v.get_type() == sol::type::lua_nil) {
+						return 0.0f;
+					}
+					if (v.get_type() != sol::type::number || !std::isfinite(v.as<double>()) ||
+							std::abs(v.as<double>()) > 64.0) {
+						throw sol::error(std::string("entity:attach_to(): offset.") + k +
+								" must be a number in [-64, 64]");
+					}
+					return static_cast<float>(v.as<double>());
+				};
+				a.offset = core::Vec3f{ axis("x"), axis("y"), axis("z") };
+			}
+			if (const sol::object v = (*opts)["face_offset"]; v.get_type() != sol::type::lua_nil) {
+				a.face_offset = parse_bool("entity:attach_to(): face_offset", v);
+			}
+			if (const sol::object v = (*opts)["layer"]; v.get_type() != sol::type::lua_nil) {
+				a.layer = parse_layer("entity:attach_to(): layer", v);
+			}
+		}
+		it->second.attach = a;
+		if (session != nullptr) {
+			session->set_script_entity_attachment(id, a);
+		}
+	};
+	// Replaces (table) or clears (nil) this entity's per-instance visual
+	// override at runtime -- same shape as spawn's `visual_override` -- and
+	// replicates it; the entity keeps its net id.
+	entity_methods["set_visual_override"] = [this](sol::table self, sol::object arg) {
+		const core::NetId id = self_net_id(self);
+		if (entities.find(id) == entities.end()) {
+			throw sol::error("entity:set_visual_override(): entity is gone");
+		}
+		std::optional<protocol::EntityVisualOverride> ov;
+		if (arg.get_type() == sol::type::table) {
+			ov = parse_entity_visual_override(arg.as<sol::table>());
+		} else if (arg.get_type() != sol::type::lua_nil) {
+			throw sol::error("entity:set_visual_override(): expected a table or nil");
+		}
+		if (session != nullptr) {
+			session->set_script_entity_visual_override(id, std::move(ov));
+		}
+	};
+	// Undoes attach_to; the entity stays where it is. No-op if not attached.
+	entity_methods["detach"] = [this](sol::table self) {
+		const core::NetId id = self_net_id(self);
+		const auto it = entities.find(id);
+		if (it == entities.end()) {
+			throw sol::error("entity:detach(): entity is gone");
+		}
+		it->second.attach.reset();
+		if (session != nullptr) {
+			session->set_script_entity_attachment(id, std::nullopt);
+		}
+	};
+	// The label's current value, or nil if the entity has none.
+	entity_methods["get_text"] = [this](sol::table self, sol::this_state ts) -> sol::object {
+		sol::state_view sv(ts);
+		const auto it = entities.find(self_net_id(self));
+		if (it == entities.end() || !it->second.text) {
+			return sol::make_object(sv, sol::lua_nil);
+		}
+		return sol::make_object(sv, it->second.text->value);
+	};
 	entity_mt = lua.create_table();
 	entity_mt["__index"] = entity_methods;
 
@@ -1972,11 +2449,29 @@ void PackRuntime::Impl::install_bindings() {
 		if (visual_override_table) {
 			visual_override = parse_entity_visual_override(*visual_override_table);
 		}
+		// Same "validate before spawning" rule for the label: the kind's style
+		// is the base, a string sets just the value, a table overrides fields.
+		std::optional<protocol::EntityText> text;
+		if (!kind_it->text_style.value.empty()) {
+			text = kind_it->text_style;
+		}
+		if (opts) {
+			if (const sol::object text_obj = (*opts)["text"];
+					text_obj.get_type() != sol::type::lua_nil) {
+				text = parse_entity_text("vb.world.spawn", text_obj, kind_it->text_style);
+			}
+		}
+		if (text && text->value.empty()) {
+			text.reset();
+		}
 		const core::Vec3d p{ pos.get_or("x", 0.0), pos.get_or("y", 0.0),
 			pos.get_or("z", 0.0) };
 		const core::NetId id = session->spawn_script_entity(kind_it->id, p);
 		if (visual_override) {
 			session->set_script_entity_visual_override(id, visual_override);
+		}
+		if (text) {
+			session->set_script_entity_text(id, text);
 		}
 		sol::table self = sv.create_table();
 		self[sol::metatable_key] = entity_mt;
@@ -1990,7 +2485,7 @@ void PackRuntime::Impl::install_bindings() {
 		}
 		const std::size_t kind_index =
 				static_cast<std::size_t>(kind_it - entity_kinds.begin());
-		ScriptEntity entity{ .kind_index = kind_index, .self = self, .pos = p, .health = std::nullopt };
+		ScriptEntity entity{ .kind_index = kind_index, .self = self, .pos = p, .health = std::nullopt, .text = text, .attach = std::nullopt };
 		if (kind_it->max_health) {
 			entity.health = *kind_it->max_health;
 		}
@@ -2673,7 +3168,7 @@ void PackRuntime::install_entity_kind_registry(net::HandshakeServerHost &host) {
 		std::vector<protocol::EntityKindRegistryRecord> out;
 		out.reserve(self->entity_kinds.size());
 		for (const auto &e : self->entity_kinds) {
-			out.push_back({ e.name, e.width, e.height, e.visual });
+			out.push_back({ e.name, e.width, e.height, e.visual, e.hidden });
 		}
 		return out;
 	};
@@ -2763,6 +3258,10 @@ net::ServerSession::HungerParams PackRuntime::effective_hunger_params(
 	out.starvation_damage_per_second = def.get_or(
 			"starvation_damage_per_second", out.starvation_damage_per_second);
 	return out;
+}
+
+bool PackRuntime::third_person_allowed() const {
+	return impl_->third_person_allowed;
 }
 
 std::optional<protocol::S2CFogParams> PackRuntime::effective_fog_params() const {
@@ -3182,6 +3681,9 @@ std::shared_ptr<const worldgen::PackWorldGenPipeline> PackRuntime::build_worldge
 
 void PackRuntime::attach_session(net::ServerSession &session) {
 	impl_->session = &session;
+	session.set_on_script_entity_orphaned([this](core::NetId id) {
+		impl_->despawn_entity(id, "parent_removed");
+	});
 	session.set_ui_event_handler(
 			[this](core::NetId player, const protocol::C2SUiEvent &e) {
 				dispatch_ui_event(player, e);

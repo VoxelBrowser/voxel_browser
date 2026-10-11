@@ -435,18 +435,43 @@ public:
 	void set_script_entity_state(core::NetId id, core::Vec3d pos,
 			core::Vec2f rot = {}, core::Vec3f vel = {});
 	void remove_script_entity(core::NetId id);
+	// Current server-side position of a script entity (moved by
+	// update_attachments() while attached); nullopt for an unknown id.
+	std::optional<core::Vec3d> script_entity_pos(core::NetId id) const;
 
-	// Entity-management follow-up (spec architecture_spec/rendering.md
-	// §11.3's "Per-instance override"): `vb.world.spawn`'s `visual_override`
-	// option. `nullopt` clears it (no-op if never set). Attached to the one
-	// S2C_EntitySnapshot record a given observing client receives when this
-	// NetId first enters their interest set (protocol::EntityRecord::
-	// visual_override, see ServerSession::to_record/broadcast_snapshots) --
-	// fixed for the entity's whole replicated lifetime, same as `kind`; there
-	// is no path yet to change it after a client has already seen the entity
-	// (deliberately out of scope for this pass, see REMAINING_TASKS.md).
+	// The per-instance visual override (`vb.world.spawn`'s
+	// `visual_override`, player:/entity:set_visual_override). Replicated in
+	// S2C_EntityProps like the properties below, so it can change at any
+	// time; works for a playing player's net id as well as a script entity.
+	// `nullopt` clears it.
 	void set_script_entity_visual_override(
 			core::NetId id, std::optional<protocol::EntityVisualOverride> override_def);
+
+	// Pack-set, changeable properties of a script entity, replicated in
+	// S2C_EntityProps (not the per-tick snapshot): broadcast_snapshots() sends
+	// all of them to each client the entity enters the interest set of, and
+	// each change (or removal) to every client that already sees it, on the
+	// next tick. `nullopt` clears the property (no-op if it was never set).
+	//
+	// The world-space text label (`vb.world.spawn`'s `text`, entity:set_text),
+	// already fully resolved by PackRuntime.
+	void set_script_entity_text(
+			core::NetId id, std::optional<protocol::EntityText> text);
+	// entity:set_clip(name): the animation clip every client plays for this
+	// entity instead of the one it would pick from velocity/flags.
+	void set_script_entity_clip(core::NetId id, std::optional<std::string> clip);
+	// entity:attach_to(parent, ...): update_attachments() moves the entity to
+	// its parent's position + offset every tick (clients do the same per
+	// frame from the parent's interpolated position). When the parent is
+	// gone, the orphan handler below runs (or the entity is removed if none
+	// is set).
+	void set_script_entity_attachment(
+			core::NetId id, std::optional<protocol::EntityAttachment> attachment);
+	// PackRuntime despawns an entity whose attachment parent disappeared
+	// through this, so the pack's on_death and bookkeeping run as usual.
+	void set_on_script_entity_orphaned(std::function<void(core::NetId)> fn) {
+		on_script_entity_orphaned_ = std::move(fn);
+	}
 
 	// Phase 6.18 (Growtopia-style combat): tunables for punch() below. One
 	// discrete swing per call -- edge-triggering (only calling punch() on a
@@ -671,11 +696,26 @@ private:
 	// set_script_entity_state()/remove_script_entity() can find the entity
 	// again by the id PackRuntime already tracks its Lua-side state under.
 	std::unordered_map<core::NetId, entt::entity> script_entities_;
-	// set_script_entity_visual_override()'s storage -- looked up by
-	// broadcast_snapshots() only when building an `entered` record (see
-	// to_record()); absent means the entity never set one.
-	std::unordered_map<core::NetId, protocol::EntityVisualOverride>
-			script_entity_visual_overrides_;
+	// set_script_entity_text()/_clip()/_attachment()'s storage (an entity
+	// with none of them has no entry), plus which properties of which ids
+	// changed since the last broadcast_snapshots() (which sends and clears
+	// them; protocol::EntityPropField bits).
+	struct ScriptEntityProps {
+		std::optional<protocol::EntityText> text;
+		std::optional<std::string> clip;
+		std::optional<protocol::EntityAttachment> attach;
+		std::optional<protocol::EntityVisualOverride> visual;
+
+		bool empty() const { return !text && !clip && !attach && !visual; }
+	};
+	std::unordered_map<core::NetId, ScriptEntityProps> script_entity_props_;
+	std::unordered_map<core::NetId, std::uint8_t> dirty_entity_props_;
+	std::function<void(core::NetId)> on_script_entity_orphaned_;
+	template <typename T>
+	void set_script_entity_prop(core::NetId id, std::optional<T> ScriptEntityProps::*field,
+			std::optional<T> value, std::uint8_t bit);
+	void update_attachments();
+	bool is_playing(core::NetId id) const;
 	std::map<ConnId, Conn> conns_;
 	replication::InterestGrid interest_;
 	std::unique_ptr<WorldReplicator> replicator_;
@@ -874,6 +914,10 @@ public:
 	}
 
 	const physics::MoveState &predicted_state() const { return predicted_; }
+	// The entity kind the server reports for this client's own player
+	// (EntityRecord::kind of the snapshot's `local` record, i.e. the
+	// pack's represents="player" kind); kInvalid until the first snapshot.
+	core::EntityKindId local_entity_kind() const { return local_kind_; }
 	core::Vec3d predicted_feet() const { return predicted_.position; }
 	std::uint32_t last_acked_input_seq() const { return last_acked_seq_; }
 	std::size_t unacked_input_count() const { return history_.size(); }
@@ -938,8 +982,36 @@ public:
 	// never set one, same "missing = default" posture as entity_kind().
 	const protocol::EntityVisualOverride *entity_visual_override(
 			core::NetId id) const {
+		// Since protocol 32 the server sends it in S2C_EntityProps (and may
+		// change it at any time); the snapshot copy is only a fallback.
+		if (const auto p = entity_props_.find(id); p != entity_props_.end() && p->second.visual) {
+			return &*p->second.visual;
+		}
 		const auto it = entity_visual_overrides_.find(id);
 		return it == entity_visual_overrides_.end() ? nullptr : &it->second;
+	}
+	// The local player's own appearance (player:set_visual_override), for a
+	// third-person view or a UI preview; nullptr when the pack set none.
+	const protocol::EntityVisualOverride *my_visual_override() const {
+		const auto &ja = join_accept();
+		return ja ? entity_visual_override(ja->your_net_id) : nullptr;
+	}
+
+	// A script entity's S2C_EntityProps properties: its text label, the clip
+	// the pack forced with entity:set_clip, and its attachment. nullptr /
+	// nullopt when unset. Dropped when the entity leaves this client's
+	// interest set.
+	const protocol::EntityText *entity_text(core::NetId id) const {
+		const auto it = entity_props_.find(id);
+		return it == entity_props_.end() || !it->second.text ? nullptr : &*it->second.text;
+	}
+	const std::string *entity_clip(core::NetId id) const {
+		const auto it = entity_props_.find(id);
+		return it == entity_props_.end() || !it->second.clip ? nullptr : &*it->second.clip;
+	}
+	const protocol::EntityAttachment *entity_attachment(core::NetId id) const {
+		const auto it = entity_props_.find(id);
+		return it == entity_props_.end() || !it->second.attach ? nullptr : &*it->second.attach;
 	}
 
 	// The block a replicated dropped-item entity represents (learned from its
@@ -1050,6 +1122,7 @@ private:
 	void apply_day_night_curve(const protocol::S2CDayNightCurve &msg);
 	void apply_fog_params(const protocol::S2CFogParams &msg);
 	void apply_block_damage(const protocol::S2CBlockDamage &msg);
+	void apply_entity_props(const protocol::S2CEntityProps &msg);
 	void apply_snapshot(const protocol::S2CEntitySnapshot &snap);
 	void reconcile(const protocol::EntityRecord &authoritative,
 			std::uint32_t acked_seq);
@@ -1104,11 +1177,24 @@ private:
 	std::unordered_map<core::NetId, protocol::EntityVisualOverride>
 			entity_visual_overrides_;
 	std::unordered_map<core::NetId, std::uint16_t> entity_items_;
+	// entity_text()/entity_clip()/entity_attachment()'s storage.
+	// `server_tick` is the S2C_EntityProps tick they last changed in: a
+	// snapshot removal only drops properties older than itself, since the two
+	// travel on different lanes (see apply_snapshot).
+	struct ReceivedEntityProps {
+		std::optional<protocol::EntityText> text;
+		std::optional<std::string> clip;
+		std::optional<protocol::EntityAttachment> attach;
+		std::optional<protocol::EntityVisualOverride> visual;
+		std::uint32_t server_tick = 0;
+	};
+	std::unordered_map<core::NetId, ReceivedEntityProps> entity_props_;
 	world::DayNightCurve day_night_curve_; // empty = default_day_night_curve()
 	std::optional<protocol::S2CFogParams> fog_override_;
 	BlockDamageTracker block_damage_;
 
 	physics::MoveState predicted_;
+	core::EntityKindId local_kind_ = core::EntityKindId::kInvalid;
 	physics::MoveParams move_params_;
 	std::vector<protocol::InputCmd> history_; // unacked, ascending seq
 	std::uint32_t last_acked_seq_ = 0;

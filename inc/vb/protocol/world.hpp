@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -158,6 +159,26 @@ struct EntityClipDef {
 	bool operator==(const EntityClipDef &) const = default;
 };
 
+// One extra sheet drawn in the same billboard as a visual's base texture
+// (protocol v32; paper-doll clothing). It shares the base sheet's layout --
+// frame size, facings, mirror, clips -- and is drawn with exactly the base
+// frame's source rectangle, so body and clothes can never drift apart. The
+// client skips (with a warning) a layer whose sheet size differs from the
+// base sheet's.
+struct EntityVisualLayer {
+	std::string texture; // pack-relative path
+	bool below = false; // draw before (behind) the base sheet
+	// Bit i set = only drawn on pose row i (rows are the sheet's facing
+	// rows, 0 = front); 0 = every row. Lets one cape sheet sit behind the
+	// body on front views and over it on back views.
+	std::uint8_t rows = 0;
+	std::array<std::uint8_t, 4> tint{ 255, 255, 255, 255 }; // multiplies the sheet
+
+	bool operator==(const EntityVisualLayer &) const = default;
+};
+
+inline constexpr std::size_t kMaxEntityVisualLayers = 16;
+
 // Kind-level default spritesheet, `vb.register_entity{visual = {...}}`
 // (rendering.md §11.3). `frame_width`/`frame_height` come from the pack's
 // chosen named variant (resolved server-side at registration, see
@@ -183,6 +204,15 @@ struct EntityVisualDef {
 	float origin_y = 1.0f;
 	bool mirror = true;
 	std::vector<EntityClipDef> clips;
+	// Protocol v32. Sprites that overlap draw in `layer` order: each step
+	// nudges the billboard 0.02 blocks toward the camera, so a layer 1 sprite
+	// at a player's exact position always wins the depth test against it
+	// (layer -1 always loses). Range [-8, 8], validated by the binding.
+	std::int8_t layer = 0;
+	// Skip the depth test so terrain never hides the sprite (markers).
+	bool through_walls = false;
+	// Extra sheets drawn in this billboard, in order (protocol v32).
+	std::vector<EntityVisualLayer> layers;
 
 	bool operator==(const EntityVisualDef &) const = default;
 };
@@ -207,6 +237,9 @@ struct EntityVisualOverride {
 	std::optional<float> origin_y;
 	std::optional<bool> mirror;
 	std::optional<std::vector<EntityClipDef>> clips;
+	std::optional<std::int8_t> layer; // v32
+	std::optional<bool> through_walls; // v32
+	std::optional<std::vector<EntityVisualLayer>> layers; // v32; replaces the kind's list
 
 	bool operator==(const EntityVisualOverride &) const = default;
 };
@@ -223,6 +256,10 @@ struct EntityKindRegistryRecord {
 	// only sets width/height), same "missing = default" posture as every
 	// other opt-in registry field in this codebase.
 	std::optional<EntityVisualDef> visual;
+	// `vb.register_entity{visual = false}` (protocol v32): draw no sprite and
+	// no placeholder quad at all -- for a text-only entity whose whole look
+	// is its S2C_EntityProps label.
+	bool hidden = false;
 
 	bool operator==(const EntityKindRegistryRecord &) const = default;
 };

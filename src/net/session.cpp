@@ -281,6 +281,7 @@ void ServerSession::handle_input_batch(Conn &conn,
 	s.vel = core::Vec3f{ static_cast<float>(vel.value.x),
 		static_cast<float>(vel.value.y),
 		static_cast<float>(vel.value.z) };
+	s.flags = pack_flags(collider.on_ground);
 	interest_.upsert(s);
 }
 
@@ -1035,6 +1036,8 @@ void ServerSession::system_network_io(double dt_seconds) {
 				if (it->second.playing) {
 					--playing_;
 					interest_.remove(it->second.net_id);
+					script_entity_props_.erase(it->second.net_id);
+					dirty_entity_props_.erase(it->second.net_id);
 					block_damage_.remove_player(it->second.net_id);
 					region_occupancy_.erase(it->second.net_id);
 					if (replicator_) {
@@ -1180,8 +1183,15 @@ void ServerSession::system_sync_interest() {
 				static_cast<float>(v->value.y),
 				static_cast<float>(v->value.z) };
 		}
+		// No Collider means the pack positions this entity itself: there is
+		// no notion of ground, so report it grounded and let the client pick
+		// idle/walk/run from its velocity.
+		std::uint8_t flags = pack_flags(true);
+		if (const auto *c = registry_.try_get<ecs::Collider>(entity)) {
+			flags = pack_flags(c->on_ground);
+		}
 		interest_.upsert(replication::EntityState{
-				net.net_id, kind, pos.value, rot, vel });
+				net.net_id, kind, pos.value, rot, vel, flags });
 	}
 }
 
@@ -1243,6 +1253,9 @@ void ServerSession::build_systems() {
 			});
 	systems_.add("sync_player_status", [this](entt::registry &, const ecs::TickContext &) {
 		sync_player_status();
+	});
+	systems_.add("update_attachments", [this](entt::registry &, const ecs::TickContext &) {
+		update_attachments();
 	});
 	systems_.add("sync_interest", [this](entt::registry &, const ecs::TickContext &) {
 		system_sync_interest();
@@ -1514,7 +1527,8 @@ core::NetId ServerSession::spawn_item_drop(
 	// visual for drops (see set_item_drop_visual_kind()); unset falls back to
 	// the reserved world::kItemDropKind sentinel, exact pre-existing behavior.
 	interest_.upsert(replication::EntityState{
-			id, item_drop_visual_kind_.value_or(world::kItemDropKind), pos, {}, {} });
+			id, item_drop_visual_kind_.value_or(world::kItemDropKind), pos, {}, {},
+			pack_flags(true) });
 	return id;
 }
 
@@ -1555,6 +1569,14 @@ void ServerSession::set_script_entity_state(
 	// system_sync_interest(); no need to upsert it here too.
 }
 
+std::optional<core::Vec3d> ServerSession::script_entity_pos(core::NetId id) const {
+	const auto it = script_entities_.find(id);
+	if (it == script_entities_.end()) {
+		return std::nullopt;
+	}
+	return registry_.get<ecs::Position>(it->second).value;
+}
+
 void ServerSession::remove_script_entity(core::NetId id) {
 	const auto it = script_entities_.find(id);
 	if (it != script_entities_.end()) {
@@ -1562,15 +1584,121 @@ void ServerSession::remove_script_entity(core::NetId id) {
 		script_entities_.erase(it);
 	}
 	interest_.remove(id);
-	script_entity_visual_overrides_.erase(id);
+	script_entity_props_.erase(id);
+	dirty_entity_props_.erase(id);
+}
+
+template <typename T>
+void ServerSession::set_script_entity_prop(core::NetId id,
+		std::optional<T> ScriptEntityProps::*field, std::optional<T> value,
+		std::uint8_t bit) {
+	if (script_entities_.find(id) == script_entities_.end() && !is_playing(id)) {
+		return;
+	}
+	const auto it = script_entity_props_.find(id);
+	if (it == script_entity_props_.end()) {
+		if (!value) {
+			return;
+		}
+		script_entity_props_[id].*field = std::move(value);
+	} else {
+		if (it->second.*field == value) {
+			return; // unchanged: nothing to resend
+		}
+		it->second.*field = std::move(value);
+		if (it->second.empty()) {
+			script_entity_props_.erase(it);
+		}
+	}
+	dirty_entity_props_[id] |= bit;
+}
+
+void ServerSession::set_script_entity_text(
+		core::NetId id, std::optional<protocol::EntityText> text) {
+	set_script_entity_prop(id, &ScriptEntityProps::text, std::move(text),
+			protocol::kEntityPropText);
 }
 
 void ServerSession::set_script_entity_visual_override(
 		core::NetId id, std::optional<protocol::EntityVisualOverride> override_def) {
-	if (override_def) {
-		script_entity_visual_overrides_[id] = std::move(*override_def);
-	} else {
-		script_entity_visual_overrides_.erase(id);
+	set_script_entity_prop(id, &ScriptEntityProps::visual, std::move(override_def),
+			protocol::kEntityPropVisual);
+}
+
+bool ServerSession::is_playing(core::NetId id) const {
+	for (const auto &[conn, state] : conns_) {
+		(void)conn;
+		if (state.playing && state.net_id == id) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void ServerSession::set_script_entity_clip(core::NetId id, std::optional<std::string> clip) {
+	set_script_entity_prop(id, &ScriptEntityProps::clip, std::move(clip),
+			protocol::kEntityPropClip);
+}
+
+void ServerSession::set_script_entity_attachment(
+		core::NetId id, std::optional<protocol::EntityAttachment> attachment) {
+	set_script_entity_prop(id, &ScriptEntityProps::attach, std::move(attachment),
+			protocol::kEntityPropAttach);
+}
+
+// Runs after script_tick and before sync_interest: every attached script
+// entity takes its parent's position (+ offset), facing and velocity, so
+// interest culling, entity:get_pos() and the walk/run clip all follow the
+// parent. A parent that left the interest grid (despawned, disconnected)
+// orphans the entity.
+void ServerSession::update_attachments() {
+	std::vector<core::NetId> orphans;
+	for (const auto &[id, props] : script_entity_props_) {
+		if (!props.attach) {
+			continue;
+		}
+		const auto ent = script_entities_.find(id);
+		if (ent == script_entities_.end()) {
+			continue;
+		}
+		// A script-entity parent is read from the registry (it may have been
+		// spawned this tick, before sync_interest put it in interest_); a
+		// player from interest_, which its input handling keeps current.
+		core::Vec3d ppos{};
+		core::Vec2f prot{};
+		core::Vec3d pvel{};
+		if (const auto pent = script_entities_.find(props.attach->parent);
+				pent != script_entities_.end()) {
+			ppos = registry_.get<ecs::Position>(pent->second).value;
+			if (const auto *r = registry_.try_get<ecs::Rotation>(pent->second)) {
+				prot = { r->yaw, r->pitch };
+			}
+			if (const auto *v = registry_.try_get<ecs::Velocity>(pent->second)) {
+				pvel = v->value;
+			}
+		} else if (const replication::EntityState *parent = interest_.get(props.attach->parent)) {
+			ppos = parent->pos;
+			prot = parent->rot;
+			pvel = { static_cast<double>(parent->vel.x), static_cast<double>(parent->vel.y),
+				static_cast<double>(parent->vel.z) };
+		} else {
+			orphans.push_back(id);
+			continue;
+		}
+		const core::Vec3d off = protocol::attachment_world_offset(*props.attach, prot.x);
+		registry_.get<ecs::Position>(ent->second).value =
+				core::Vec3d{ ppos.x + off.x, ppos.y + off.y, ppos.z + off.z };
+		registry_.emplace_or_replace<ecs::Rotation>(ent->second, prot.x, prot.y);
+		registry_.emplace_or_replace<ecs::Velocity>(ent->second, pvel);
+	}
+	for (const core::NetId id : orphans) {
+		if (on_script_entity_orphaned_) {
+			on_script_entity_orphaned_(id);
+		}
+		// The handler normally despawns it; make sure it's gone either way.
+		if (script_entities_.find(id) != script_entities_.end()) {
+			remove_script_entity(id);
+		}
 	}
 }
 
@@ -1622,6 +1750,7 @@ protocol::EntityRecord to_record(const replication::EntityState &s,
 	r.pos = s.pos;
 	r.rot = s.rot;
 	r.vel = s.vel;
+	r.flags = s.flags;
 	if (override_def != nullptr) {
 		r.visual_override = *override_def;
 	}
@@ -1648,17 +1777,14 @@ void ServerSession::broadcast_snapshots() {
 		snap.server_tick = server_tick_;
 		for (core::NetId id : d.entered) {
 			if (const auto *e = interest_.get(id)) {
-				const auto ov_it = script_entity_visual_overrides_.find(id);
+				// A visual override travels in S2C_EntityProps (reliable, and
+				// changeable at runtime), not on this record.
 				const auto drop_it = item_drops_.drops().find(id);
-				const protocol::EntityVisualOverride *visual_override = nullptr;
-				if (ov_it != script_entity_visual_overrides_.end()) {
-					visual_override = &ov_it->second;
-				}
 				std::optional<std::uint16_t> item;
 				if (drop_it != item_drops_.drops().end()) {
 					item = static_cast<std::uint16_t>(drop_it->second.item);
 				}
-				snap.entered.push_back(to_record(*e, visual_override, item));
+				snap.entered.push_back(to_record(*e, nullptr, item));
 			}
 		}
 		for (core::NetId id : d.stayed) {
@@ -1667,6 +1793,51 @@ void ServerSession::broadcast_snapshots() {
 			}
 		}
 		snap.removed = d.left;
+
+		// Text, clip and attachment ride their own reliable message
+		// (S2C_EntityProps): everything about what just entered, plus each
+		// property that changed on something this player already sees.
+		protocol::S2CEntityProps props_msg;
+		props_msg.server_tick = server_tick_;
+		const auto add_props = [&](core::NetId id, std::uint8_t mask) {
+			const auto it = script_entity_props_.find(id);
+			const ScriptEntityProps none;
+			const ScriptEntityProps &p = it != script_entity_props_.end() ? it->second : none;
+			protocol::EntityPropsUpdate u;
+			u.net_id = id;
+			if (mask & protocol::kEntityPropText) {
+				u.text = p.text;
+			}
+			if (mask & protocol::kEntityPropClip) {
+				u.clip = p.clip;
+			}
+			if (mask & protocol::kEntityPropAttach) {
+				u.attach = p.attach;
+			}
+			if (mask & protocol::kEntityPropVisual) {
+				u.visual = p.visual;
+			}
+			props_msg.updates.push_back(std::move(u));
+		};
+		if (!script_entity_props_.empty()) {
+			for (core::NetId id : d.entered) {
+				if (script_entity_props_.find(id) != script_entity_props_.end()) {
+					add_props(id, protocol::kEntityPropAll);
+				}
+			}
+		}
+		for (const auto &[id, mask] : dirty_entity_props_) {
+			// Not visible, or just entered (handled above). A player's own
+			// appearance goes to them too (third-person camera, UI preview);
+			// interest culling never lists yourself.
+			if (id == state.net_id ||
+					std::binary_search(d.stayed.begin(), d.stayed.end(), id)) {
+				add_props(id, mask);
+			}
+		}
+		if (!props_msg.updates.empty()) {
+			send_message(transport_, conn, props_msg);
+		}
 
 		state.last_visible = std::move(visible);
 
@@ -1697,6 +1868,7 @@ void ServerSession::broadcast_snapshots() {
 		}
 		send_message(transport_, conn, snap);
 	}
+	dirty_entity_props_.clear();
 }
 
 void ServerSession::set_player_state(core::NetId id, core::Vec3d pos,
@@ -2220,6 +2392,15 @@ bool ClientSession::apply_gameplay_frame(const protocol::Frame &frame) {
 			}
 			return true;
 		}
+		case MessageType::kS2CEntityProps: {
+			if (auto m = protocol::S2CEntityProps::decode(frame.payload)) {
+				apply_entity_props(*m);
+			} else {
+				VB_ERROR("net", "malformed S2C_EntityProps: ",
+						core::message(m.error()));
+			}
+			return true;
+		}
 		case MessageType::kS2CBlockDamage: {
 			if (auto m = protocol::S2CBlockDamage::decode(frame.payload)) {
 				apply_block_damage(*m);
@@ -2328,6 +2509,28 @@ void ClientSession::apply_block_damage(const protocol::S2CBlockDamage &msg) {
 	block_damage_.on_damage(msg.pos, msg.punches, msg.revision);
 }
 
+void ClientSession::apply_entity_props(const protocol::S2CEntityProps &msg) {
+	for (const auto &u : msg.updates) {
+		ReceivedEntityProps &p = entity_props_[u.net_id];
+		p.server_tick = msg.server_tick;
+		if (u.text) {
+			p.text = *u.text;
+		}
+		if (u.clip) {
+			p.clip = *u.clip;
+		}
+		if (u.attach) {
+			p.attach = *u.attach;
+		}
+		if (u.visual) {
+			p.visual = *u.visual;
+		}
+		if (!p.text && !p.clip && !p.attach && !p.visual) {
+			entity_props_.erase(u.net_id);
+		}
+	}
+}
+
 void ClientSession::apply_snapshot(const protocol::S2CEntitySnapshot &snap) {
 	last_server_tick_ = snap.server_tick;
 
@@ -2384,6 +2587,12 @@ void ClientSession::apply_snapshot(const protocol::S2CEntitySnapshot &snap) {
 		remote_.erase(id);
 		entity_visual_overrides_.erase(id);
 		entity_items_.erase(id);
+		// Properties sent at or after this snapshot's tick belong to a later
+		// re-entry that overtook this (unreliable) removal -- keep them.
+		if (const auto it = entity_props_.find(id);
+				it != entity_props_.end() && it->second.server_tick < snap.server_tick) {
+			entity_props_.erase(it);
+		}
 		if (const auto it = net_to_entity_.find(id); it != net_to_entity_.end()) {
 			entity_registry_.destroy(it->second);
 			net_to_entity_.erase(it);
@@ -2391,6 +2600,7 @@ void ClientSession::apply_snapshot(const protocol::S2CEntitySnapshot &snap) {
 	}
 
 	if (snap.has_local) {
+		local_kind_ = snap.local.kind;
 		reconcile(snap.local, snap.last_acked_input_seq);
 	}
 }

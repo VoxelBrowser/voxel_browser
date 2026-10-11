@@ -60,12 +60,14 @@ function vb.world.raycast(origin, dir, max) end
 function vb.world.spawn_item_drop(pos, item, count) end
 
 ---@class SpawnOptions
----@field visual_override? table Per-instance override of the kind's `visual` (every field optional).
+---@field visual_override? table Per-instance override of the kind's `visual` (every field optional, including `layer`, `through_walls` and `layers`). Change it later with `entity:set_visual_override`.
+---@field text? string|EntityText World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`.
 
 ---@vb context runtime
 ---Server pack VM only. Spawns an entity of a registered kind and returns its `self` table.
 ---```lua
 ---local slime = vb.world.spawn("mypack:slime", {x=0,y=70,z=0})
+---local sign = vb.world.spawn("mypack:label", {x=0,y=70,z=0}, { text = { value = "27s", size = 0.4 } })
 ---```
 ---@param kind string Registered kind name.
 ---@param pos Vec3

@@ -30,11 +30,13 @@ enum class AnimClip {
 	kDead,
 };
 
-// Matches the planned S2C_EntitySnapshot EntityRecord.flags bit layout (spec
-// §11.3). Bit 0 is already wired (on_ground, shipped in Phase 3.4); the rest
-// are not sent by the server yet, so resolve_anim_clip() degrades gracefully
-// to jump/fall/run/walk/idle until they are (a byte of all-zero bits beyond
-// bit 0 is exactly what every EntityRecord carries today).
+// Matches the S2C_EntitySnapshot EntityRecord.flags bit layout (spec
+// §11.3). Bit 0 (on_ground) is sent for every entity since protocol 32:
+// players copy their collider, and entities without physics (script
+// entities, item drops) are always grounded, so a stationary one resolves to
+// idle. The other bits are not sent by the server yet, so resolve_anim_clip()
+// degrades gracefully to jump/fall/run/walk/idle; a pack forces any clip with
+// entity:set_clip(name) instead.
 enum EntityAnimFlag : std::uint8_t {
 	kAnimOnGround = 1u << 0,
 	kAnimDead = 1u << 1,

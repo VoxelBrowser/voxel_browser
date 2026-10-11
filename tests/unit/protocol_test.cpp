@@ -105,6 +105,7 @@ TEST_CASE("lane assignment matches the spec") {
 	CHECK(lane_for(MessageType::kS2CKeybindRegistry) == Lane::kWorld);
 	CHECK(lane_for(MessageType::kS2CEntityKindRegistry) == Lane::kWorld);
 	CHECK(lane_for(MessageType::kS2CBlockDamage) == Lane::kFeedback);
+	CHECK(lane_for(MessageType::kS2CEntityProps) == Lane::kFeedback);
 }
 
 TEST_CASE("transport lane policy: kFeedback is reliable, unbatched, on its own GNS lane") {
@@ -145,6 +146,9 @@ TEST_CASE("handshake structs round-trip") {
 	CHECK(i2.tick_rate == 20);
 	CHECK(i2.view_distance == 6);
 	CHECK(i2.auth_mode == AuthMode::kNone);
+	CHECK(i2.third_person_allowed);
+	info.third_person_allowed = false;
+	CHECK_FALSE(round_trip(info).third_person_allowed);
 
 	S2CJoinAccept accept{ vb::core::NetId{ 7 }, { 1.5, 64.25, -3.0 }, 0xABCDEF, 1200 };
 	auto a2 = round_trip(accept);
@@ -497,6 +501,158 @@ TEST_CASE("entity kind registry round-trips, including an empty list") {
 	CHECK(r2.kinds == reg.kinds);
 }
 
+TEST_CASE("entity kind registry round-trips the hidden (text-only) flag") {
+	S2CEntityKindRegistry reg;
+	reg.kinds.push_back({ .name = "test:label", .visual = std::nullopt, .hidden = true });
+	reg.kinds.push_back({ .name = "test:golem", .visual = std::nullopt });
+	auto r2 = round_trip(reg);
+	REQUIRE(r2.kinds.size() == 2);
+	CHECK(r2.kinds[0].hidden);
+	CHECK_FALSE(r2.kinds[1].hidden);
+	CHECK(r2.kinds == reg.kinds);
+}
+
+TEST_CASE("S2C_EntityProps round-trips set, cleared and unchanged fields") {
+	S2CEntityProps m;
+	m.server_tick = 1234;
+	EntityText t;
+	t.value = "Ripe!\nnow";
+	t.color = { 120, 235, 110, 255 };
+	t.background = std::array<std::uint8_t, 4>{ 40, 40, 40, 200 };
+	t.size = 0.4f;
+	t.offset_y = 0.2f;
+	t.max_distance = 24.0f;
+	t.through_walls = true;
+	EntityPropsUpdate full;
+	full.net_id = static_cast<vb::core::NetId>(0x4000'0001u);
+	full.text = t;
+	full.clip = std::string("open");
+	EntityAttachment a;
+	a.parent = static_cast<vb::core::NetId>(7);
+	a.offset = { 0.0f, 1.9f, -0.25f };
+	a.face_offset = true;
+	a.layer = -2;
+	full.attach = a;
+	m.updates.push_back(full);
+	EntityPropsUpdate cleared; // every field present but cleared
+	cleared.net_id = static_cast<vb::core::NetId>(0x4000'0002u);
+	cleared.text.emplace();
+	cleared.clip.emplace();
+	cleared.attach.emplace();
+	m.updates.push_back(cleared);
+	EntityPropsUpdate clip_only; // text/attach unchanged
+	clip_only.net_id = static_cast<vb::core::NetId>(0x4000'0003u);
+	clip_only.clip = std::string("idle");
+	m.updates.push_back(clip_only);
+
+	auto r = round_trip(m);
+	CHECK(r.server_tick == 1234);
+	CHECK(r.updates == m.updates);
+	CHECK_FALSE(r.updates[2].text.has_value());
+	CHECK_FALSE(r.updates[2].attach.has_value());
+	REQUIRE(r.updates[1].text.has_value());
+	CHECK_FALSE(r.updates[1].text->has_value());
+}
+
+TEST_CASE("S2C_EntityProps decode rejects over-long text and unknown field bits") {
+	S2CEntityProps m;
+	EntityPropsUpdate u;
+	u.net_id = static_cast<vb::core::NetId>(1);
+	EntityText t;
+	t.value = std::string(kMaxEntityTextBytes + 1, 'x');
+	u.text = t;
+	m.updates.push_back(u);
+	std::vector<std::byte> buf;
+	m.encode(buf);
+	CHECK_FALSE(S2CEntityProps::decode(buf));
+
+	S2CEntityProps ok;
+	ok.updates.push_back({ static_cast<vb::core::NetId>(1), std::nullopt, std::nullopt, std::nullopt, std::nullopt });
+	std::vector<std::byte> bytes;
+	ok.encode(bytes);
+	bytes.back() = std::byte{ 0x80 }; // the field mask: an undefined bit
+	CHECK_FALSE(S2CEntityProps::decode(bytes));
+}
+
+TEST_CASE("visual layer / through_walls round-trip in the kind registry and the override") {
+	S2CEntityKindRegistry reg;
+	EntityKindRegistryRecord rec{ .name = "test:aura", .visual = std::nullopt };
+	EntityVisualDef visual;
+	visual.texture = "textures/aura.png";
+	visual.frame_width = 64;
+	visual.frame_height = 64;
+	visual.clips.push_back({ "idle", 1, 1.0f });
+	visual.layer = -3;
+	visual.through_walls = true;
+	rec.visual = visual;
+	reg.kinds.push_back(rec);
+	auto r = round_trip(reg);
+	REQUIRE(r.kinds[0].visual.has_value());
+	CHECK(r.kinds[0].visual->layer == -3);
+	CHECK(r.kinds[0].visual->through_walls);
+
+	S2CEntitySnapshot snap;
+	EntityRecord er;
+	er.net_id = static_cast<vb::core::NetId>(3);
+	er.flags = 1;
+	EntityVisualOverride ov;
+	ov.layer = 2;
+	ov.through_walls = false;
+	er.visual_override = ov;
+	snap.entered.push_back(er);
+	auto s2 = round_trip(snap);
+	REQUIRE(s2.entered.size() == 1);
+	CHECK(s2.entered[0] == er);
+}
+
+TEST_CASE("paper-doll layers round-trip in the kind visual, the override and S2C_EntityProps") {
+	EntityVisualLayer cape;
+	cape.texture = "textures/cape.png";
+	cape.below = true;
+	cape.rows = 0b0000'0011;
+	EntityVisualLayer hat;
+	hat.texture = "textures/hat_straw.png";
+	hat.tint = { 200, 60, 60, 255 };
+
+	S2CEntityKindRegistry reg;
+	EntityKindRegistryRecord rec{ .name = "test:body", .visual = std::nullopt };
+	EntityVisualDef visual;
+	visual.texture = "textures/body.png";
+	visual.frame_width = 64;
+	visual.frame_height = 64;
+	visual.clips.push_back({ "idle", 1, 1.0f });
+	visual.layers = { cape, hat };
+	rec.visual = visual;
+	reg.kinds.push_back(rec);
+	auto r = round_trip(reg);
+	REQUIRE(r.kinds[0].visual.has_value());
+	CHECK(r.kinds[0].visual->layers == visual.layers);
+
+	EntityVisualOverride ov;
+	ov.layers = std::vector<EntityVisualLayer>{ hat };
+	S2CEntityProps props;
+	props.server_tick = 9;
+	EntityPropsUpdate set;
+	set.net_id = static_cast<vb::core::NetId>(1);
+	set.visual = ov;
+	EntityPropsUpdate clear;
+	clear.net_id = static_cast<vb::core::NetId>(2);
+	clear.visual.emplace();
+	props.updates = { set, clear };
+	auto p = round_trip(props);
+	CHECK(p.updates == props.updates);
+
+	// More than kMaxEntityVisualLayers is refused.
+	EntityVisualOverride big;
+	big.layers = std::vector<EntityVisualLayer>(kMaxEntityVisualLayers + 1, hat);
+	S2CEntityProps too_many;
+	too_many.updates.push_back({ static_cast<vb::core::NetId>(1), std::nullopt, std::nullopt,
+			std::nullopt, big });
+	std::vector<std::byte> bytes;
+	too_many.encode(bytes);
+	CHECK_FALSE(S2CEntityProps::decode(as_span(bytes)));
+}
+
 TEST_CASE("entity kind registry round-trips a real visual def") {
 	S2CEntityKindRegistry reg;
 	EntityKindRegistryRecord rec{ .name = "test:slime", .width = 0.6f, .height = 0.6f, .visual = std::nullopt };
@@ -674,7 +830,7 @@ TEST_CASE("S2CServerInfo engine_version_req is length-capped and survives trunca
 TEST_CASE("decode rejects a bad enum and trailing bytes") {
 	std::vector<std::byte> bytes;
 	S2CServerInfo{ "p", "v", 1, 20, 8, "m", AuthMode::kNone, "" }.encode(bytes);
-	bytes[bytes.size() - 2] = std::byte{ 0x7F }; // clobber auth_mode (before the empty engine_version_req)
+	bytes[bytes.size() - 3] = std::byte{ 0x7F }; // clobber auth_mode (before the empty engine_version_req and third_person_allowed)
 	auto bad = S2CServerInfo::decode(as_span(bytes));
 	CHECK_FALSE(bad);
 	CHECK(bad.error() == vb::core::ProtocolError::kBadEnum);

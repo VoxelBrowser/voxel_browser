@@ -1,6 +1,7 @@
 #include "vb/protocol/snapshot.hpp"
 
 #include "vb/protocol/byte_buffer.hpp"
+#include "visual_layer_codec.hpp"
 
 namespace vb::protocol {
 
@@ -54,6 +55,18 @@ void write_visual_override(ByteWriter &w, const EntityVisualOverride &v) {
 			w.f32(c.fps);
 		}
 	}
+	w.boolean(v.layer.has_value());
+	if (v.layer) {
+		w.i8(*v.layer);
+	}
+	w.boolean(v.through_walls.has_value());
+	if (v.through_walls) {
+		w.boolean(*v.through_walls);
+	}
+	w.boolean(v.layers.has_value());
+	if (v.layers) {
+		detail::write_visual_layers(w, *v.layers);
+	}
 }
 
 EntityVisualOverride read_visual_override(ByteReader &r) {
@@ -91,6 +104,15 @@ EntityVisualOverride read_visual_override(ByteReader &r) {
 			clips.push_back(std::move(c));
 		}
 		v.clips = std::move(clips);
+	}
+	if (r.boolean()) {
+		v.layer = r.i8();
+	}
+	if (r.boolean()) {
+		v.through_walls = r.boolean();
+	}
+	if (r.boolean()) {
+		v.layers = detail::read_visual_layers(r);
 	}
 	return v;
 }
@@ -137,6 +159,47 @@ EntityRecord read_record(ByteReader &r) {
 		out.item = r.u16();
 	}
 	return out;
+}
+
+void write_rgba(ByteWriter &w, const std::array<std::uint8_t, 4> &c) {
+	for (std::uint8_t v : c) {
+		w.u8(v);
+	}
+}
+
+std::array<std::uint8_t, 4> read_rgba(ByteReader &r) {
+	std::array<std::uint8_t, 4> c{};
+	for (std::uint8_t &v : c) {
+		v = r.u8();
+	}
+	return c;
+}
+
+void write_entity_text(ByteWriter &w, const EntityText &t) {
+	w.string(t.value);
+	write_rgba(w, t.color);
+	w.boolean(t.background.has_value());
+	if (t.background) {
+		write_rgba(w, *t.background);
+	}
+	w.f32(t.size);
+	w.f32(t.offset_y);
+	w.f32(t.max_distance);
+	w.boolean(t.through_walls);
+}
+
+EntityText read_entity_text(ByteReader &r) {
+	EntityText t;
+	t.value = r.string(kMaxEntityTextBytes);
+	t.color = read_rgba(r);
+	if (r.boolean()) {
+		t.background = read_rgba(r);
+	}
+	t.size = r.f32();
+	t.offset_y = r.f32();
+	t.max_distance = r.f32();
+	t.through_walls = r.boolean();
+	return t;
 }
 
 } // namespace
@@ -201,6 +264,112 @@ Decoded<S2CEntitySnapshot> S2CEntitySnapshot::decode(std::span<const std::byte> 
 		m.local = read_record(r);
 	}
 
+	r.expect_consumed();
+	if (r.failed()) {
+		return Err{ r.error() };
+	}
+	return m;
+}
+
+void S2CEntityProps::encode(std::vector<std::byte> &out) const {
+	ByteWriter w(out);
+	w.u32(server_tick);
+	w.varint(updates.size());
+	for (const auto &u : updates) {
+		w.u32(static_cast<std::uint32_t>(u.net_id));
+		const unsigned mask = (u.text ? unsigned{ kEntityPropText } : 0u) |
+				(u.clip ? unsigned{ kEntityPropClip } : 0u) |
+				(u.attach ? unsigned{ kEntityPropAttach } : 0u) |
+				(u.visual ? unsigned{ kEntityPropVisual } : 0u);
+		w.u8(static_cast<std::uint8_t>(mask));
+		if (u.text) {
+			w.boolean(u.text->has_value());
+			if (*u.text) {
+				write_entity_text(w, **u.text);
+			}
+		}
+		if (u.clip) {
+			w.boolean(u.clip->has_value());
+			if (*u.clip) {
+				w.string(**u.clip);
+			}
+		}
+		if (u.attach) {
+			w.boolean(u.attach->has_value());
+			if (*u.attach) {
+				const EntityAttachment &a = **u.attach;
+				w.u32(static_cast<std::uint32_t>(a.parent));
+				w.f32(a.offset.x);
+				w.f32(a.offset.y);
+				w.f32(a.offset.z);
+				w.boolean(a.face_offset);
+				w.boolean(a.layer.has_value());
+				if (a.layer) {
+					w.i8(*a.layer);
+				}
+			}
+		}
+		if (u.visual) {
+			w.boolean(u.visual->has_value());
+			if (*u.visual) {
+				write_visual_override(w, **u.visual);
+			}
+		}
+	}
+}
+
+Decoded<S2CEntityProps> S2CEntityProps::decode(std::span<const std::byte> in) {
+	ByteReader r(in);
+	S2CEntityProps m;
+	m.server_tick = r.u32();
+	const std::uint64_t n = r.varint();
+	if (n > kMaxRecords) {
+		return Err{ core::ProtocolError::kLengthExceeded };
+	}
+	m.updates.reserve(static_cast<std::size_t>(n));
+	for (std::uint64_t i = 0; i < n && !r.failed(); ++i) {
+		EntityPropsUpdate u;
+		u.net_id = static_cast<core::NetId>(r.u32());
+		const std::uint8_t mask = r.u8();
+		if ((mask & ~kEntityPropAll) != 0) {
+			r.fail(core::ProtocolError::kMalformed);
+			break;
+		}
+		if (mask & kEntityPropText) {
+			u.text.emplace();
+			if (r.boolean()) {
+				*u.text = read_entity_text(r);
+			}
+		}
+		if (mask & kEntityPropClip) {
+			u.clip.emplace();
+			if (r.boolean()) {
+				*u.clip = r.string(kMaxEntityClipNameBytes);
+			}
+		}
+		if (mask & kEntityPropAttach) {
+			u.attach.emplace();
+			if (r.boolean()) {
+				EntityAttachment a;
+				a.parent = static_cast<core::NetId>(r.u32());
+				a.offset.x = r.f32();
+				a.offset.y = r.f32();
+				a.offset.z = r.f32();
+				a.face_offset = r.boolean();
+				if (r.boolean()) {
+					a.layer = r.i8();
+				}
+				*u.attach = a;
+			}
+		}
+		if (mask & kEntityPropVisual) {
+			u.visual.emplace();
+			if (r.boolean()) {
+				*u.visual = read_visual_override(r);
+			}
+		}
+		m.updates.push_back(std::move(u));
+	}
 	r.expect_consumed();
 	if (r.failed()) {
 		return Err{ r.error() };

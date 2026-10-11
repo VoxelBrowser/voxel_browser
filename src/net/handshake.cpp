@@ -214,6 +214,7 @@ ServerHandshakeStep ServerHandshake::on_frame(const Frame &frame) {
 			info.motd = config_.motd;
 			info.auth_mode = config_.auth_mode;
 			info.engine_version_req = config_.engine_version_req;
+			info.third_person_allowed = config_.third_person_allowed;
 
 			ServerHandshakeStep step;
 			if (config_.auth_mode == protocol::AuthMode::kExternal) {

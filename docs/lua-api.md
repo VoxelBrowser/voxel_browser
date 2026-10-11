@@ -159,7 +159,57 @@ rt.dispatch_tick(dt);
   to change or clear it for a client that has already seen the entity (spec
   architecture_spec/rendering.md §11.3, `docs/protocol.md`'s version-21
   entry); the reserved `self.visual_override` table is kept for pack
-  introspection only, nothing engine-side reads it back. `vb.register_biome(def)` (Phase 6.14: `name`
+  introspection only, nothing engine-side reads it back. **Text labels**
+  (protocol 32): `vb.world.spawn(kind, pos, { text = "27s" })` or `{ text =
+  { value=, color=, background=, size=, offset_y=, max_distance=,
+  through_walls= } }` attaches a camera-facing world-space label, drawn with
+  the engine's UI font; `entity:set_text(...)` changes it at any time and is
+  replicated as a small `S2C_EntityProps` delta (the entity keeps its net id,
+  so a countdown that ticks every second costs a few bytes per viewer, not a
+  respawn), `entity:set_text(nil)` removes it, `entity:get_text()` reads the
+  value back. `vb.register_entity{ text = {...} }` sets a kind's default
+  style (and optionally a default `value`): a string passed to `set_text`
+  changes only the value, a table re-applies the kind style with its own
+  fields on top. `visual = false` makes a text-only kind (no sprite, no
+  placeholder quad). The value is capped at 64 bytes of UTF-8 and colours
+  are `{r, g, b}`/`{r, g, b, a}` with 0-255 integers; both are checked in
+  the binding and fail with a Lua error. Labels are depth-tested (walls hide
+  them) unless `through_walls = true`, and `max_distance` hides one beyond
+  that many blocks. **Clips, layers and attachments** (protocol 32): the
+  client picks a clip from the entity's velocity and on-ground flag (a
+  stationary script entity plays `idle`, a moving one `walk`/`run`);
+  `entity:set_clip(name)` forces any clip the sheet declares (`"open"`,
+  `"glow"`, a padding trick to show one frame) for every client, including
+  late joiners, until `set_clip(nil)`. A clip the sheet doesn't have falls
+  back to its first clip and logs one warning per sheet and clip name.
+  Overlapping sprites are drawn back to front with clear texels cut out (a
+  sprite's empty margin never hides what's behind it); `visual.layer`
+  (-8..8, also in `visual_override`) decides which of two sprites at the
+  same spot draws in front, and `visual.through_walls = true` draws over
+  terrain. `entity:attach_to(parent, { offset =, face_offset =, layer = })`
+  glues an entity to another entity or a player: it follows the parent on
+  the server every tick and on clients every frame (no trailing), and is
+  despawned with cause `"parent_removed"` when the parent goes;
+  `entity:detach()` lets go. A name tag is `visual = false` + `text =
+  {through_walls = true}` + `attach_to(player, {offset = {y = 2}})`. **Appearance and paper-doll layers** (protocol 32): a visual (the
+  kind's or an override) can list `layers = { {texture=, below=, rows=,
+  tint=}, ... }`, extra sheets drawn in the same billboard as the base
+  texture with the base frame's exact source rectangle, so clothing stays on
+  the same facing row and animation frame as the body from every angle
+  (separate attached entities can't guarantee that). Each layer sheet must
+  be exactly the base sheet's size; a mismatched or missing one is skipped
+  with a warning and the rest still draws. `below = true` draws a layer
+  behind the base; `rows = {...}` limits it to some facing rows (list one
+  cape sheet twice: `{below = true, rows = {0}}` and `{rows = {2}}` to sit
+  behind on front views and over on back views); `tint` dyes a greyscale
+  sheet. `player:set_visual_override(t|nil)` and
+  `entity:set_visual_override(t|nil)` change an appearance at any time;
+  it's replicated reliably to everyone in range, to late joiners and to the
+  player themselves, and clients cache sheets by path so swapping outfits
+  reloads nothing. A player's override lasts for their session (re-apply it
+  in `player_join`). Players see their own outfit with the third-person
+  camera (F5), which a pack can forbid with
+  `vb.render.set_third_person(false)`. `vb.register_biome(def)` (Phase 6.14: `name`
   (idempotent-by-name, mirrors every other registration function),
   `surface`/`filler`/`stone` (block *names*, resolved to `BlockId`s via the
   registry when a pipeline is compiled), `probability` (base Voronoi-cell

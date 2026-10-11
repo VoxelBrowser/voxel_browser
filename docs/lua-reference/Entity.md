@@ -110,3 +110,98 @@ Server pack VM only. Sets health (clamped; reaching 0 despawns).
 ```lua
 self:set_health(5)
 ```
+
+## Entity:set_text
+
+`Entity:set_text(text)`
+
+context: **runtime**
+
+Server pack VM only. Sets, changes or removes the entity's world-space label; replicated as a small update, the entity is not respawned. A string changes only the text and keeps the current style. A table applies the kind's `text` style with its own fields on top (an omitted `value` keeps the current text). `nil` or `""` removes the label. Text over 64 bytes or a bad colour is an error.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `text` | `string|EntityText|nil` |  |
+
+```lua
+self:set_text("26s")
+self:set_text({ value = "Ripe!", color = { 120, 235, 110 } })
+self:set_text(nil)
+```
+
+## Entity:get_text
+
+`Entity:get_text() -> string|nil`
+
+context: **runtime**
+
+Server pack VM only. The label's current text, or `nil` if the entity has none.
+
+Returns `string|nil`
+
+```lua
+if self:get_text() == "Ripe!" then return end
+```
+
+## Entity:set_clip
+
+`Entity:set_clip(clip)`
+
+context: **runtime**
+
+Server pack VM only. Forces the animation clip every client plays for this entity (any clip its sheet declares, e.g. `"open"`), instead of the one picked from its velocity and on-ground state. Sticky and replicated, including to players who join later; `nil` goes back to the automatic choice.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `clip` | `string|nil` | Clip name (1-64 bytes) or nil. |
+
+```lua
+chest:set_clip("open")
+chest:set_clip(nil)
+```
+
+## Entity:attach_to
+
+`Entity:attach_to(parent, opts)`
+
+context: **runtime**
+
+Server pack VM only. Attaches this entity to another entity or a player: from then on it moves with the parent (every tick on the server, every frame on clients, so it never trails behind) until `detach()`. If the parent despawns or leaves, this entity is removed too (`on_death` cause `"parent_removed"`). `set_pos` has no lasting effect while attached.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `parent` | `Entity|Player` |  |
+| `opts?` | `AttachOptions` |  |
+
+```lua
+local hat = vb.world.spawn("mypack:hat", player:get_pos())
+hat:attach_to(player, { offset = { x = 0, y = 1.9, z = 0 }, layer = 1 })
+```
+
+## Entity:detach
+
+`Entity:detach()`
+
+context: **runtime**
+
+Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op when not attached.
+
+```lua
+hat:detach()
+```
+
+## Entity:set_visual_override
+
+`Entity:set_visual_override(override)`
+
+context: **runtime**
+
+Server pack VM only. Replaces (table) or clears (`nil`) this entity's per-instance visual override at runtime, same shape as `vb.world.spawn`'s `visual_override`. Replicated; the entity keeps its net id.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `override` | `table|nil` |  |
+
+```lua
+npc:set_visual_override({ layers = { { texture = "textures/apron.png" } } })
+```
