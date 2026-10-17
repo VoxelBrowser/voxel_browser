@@ -342,7 +342,12 @@ endif()
 # lz4 + xxHash — chunk / asset compression + content hashing (Phase 2/4)
 # ===========================================================================
 if(VB_WITH_COMPRESSION)
-  find_package(lz4 QUIET)
+  # A universal macOS build (CMAKE_OSX_ARCHITECTURES "arm64;x86_64") can't link
+  # Homebrew's single-arch lz4 (x86_64 slice: undefined LZ4_* symbols), so
+  # build it from source there.
+  if(NOT (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";"))
+    find_package(lz4 QUIET)
+  endif()
   if(NOT lz4_FOUND AND NOT TARGET LZ4::lz4)
     set(LZ4_BUILD_CLI OFF CACHE INTERNAL "")
     set(LZ4_BUILD_LEGACY_LZ4C OFF CACHE INTERNAL "")
