@@ -456,6 +456,19 @@ void ClientApp::enter_playing() {
 			// texture whenever one shows up (unlike the kind visuals above,
 			// an override's owning entity can spawn at any later time, not
 			// just during this one join-time pass).
+			// `sprite` UI widgets read pack textures from the same place; only
+			// the PNGs, so the (never-needing) scripts aren't copied twice.
+			vb::render::VirtualFs ui_vfs;
+			if (remote) {
+				for (const auto &[path, bytes] : entity_vfs) {
+					if (path.size() > 4 && path.compare(path.size() - 4, 4, ".png") == 0) {
+						ui_vfs.emplace(path, bytes);
+					}
+				}
+			}
+			std::filesystem::path ui_disk_root = remote ? std::filesystem::path{} : std::filesystem::path(kSingleplayerContentPack);
+			ui_renderer.set_pack_source(ui_vfs, ui_disk_root);
+			hud_renderer.set_pack_source(std::move(ui_vfs), std::move(ui_disk_root));
 			entity_renderer->set_virtual_fs(std::move(entity_vfs));
 			if (!remote) {
 				entity_renderer->set_disk_fallback(kSingleplayerContentPack);

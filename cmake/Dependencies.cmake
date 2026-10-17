@@ -302,6 +302,19 @@ if(VB_WITH_NET)
       # Skip the webrtc submodule (only needed by ICE, which is off above).
       GIT_SUBMODULES "src/external/abseil;src/external/vjson")
     FetchContent_MakeAvailable(gamenetworkingsockets)
+    # v1.6.0's minbase_identify.h only recognises x86 under MSVC and hits
+    # `#error "Cannot determine endianness of platform!"` on Windows/ARM64.
+    # ARM64 Windows is little-endian; say so for the GNS target (and whatever
+    # links it) rather than patching the fetched sources.
+    if(MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" AND TARGET GameNetworkingSockets_s)
+      target_compile_definitions(GameNetworkingSockets_s PUBLIC VALVE_LITTLE_ENDIAN=1)
+      # Its bundled donna crypto also calls __emulu(), which MSVC/ARM64 declares
+      # but doesn't implement (unresolved external at link time).
+      add_library(vb_arm64_msvc_shims STATIC "${CMAKE_CURRENT_LIST_DIR}/shims/arm64_msvc_emulu.c")
+      # BUILD_INTERFACE: GNS's install(EXPORT) rejects a dependency that isn't in
+      # its export set, and we never install it.
+      target_link_libraries(GameNetworkingSockets_s PUBLIC "$<BUILD_INTERFACE:vb_arm64_msvc_shims>")
+    endif()
   endif()
 endif()
 
@@ -342,7 +355,12 @@ endif()
 # lz4 + xxHash — chunk / asset compression + content hashing (Phase 2/4)
 # ===========================================================================
 if(VB_WITH_COMPRESSION)
-  find_package(lz4 QUIET)
+  # A universal macOS build (CMAKE_OSX_ARCHITECTURES "arm64;x86_64") can't link
+  # Homebrew's single-arch lz4 (x86_64 slice: undefined LZ4_* symbols), so
+  # build it from source there.
+  if(NOT (APPLE AND CMAKE_OSX_ARCHITECTURES MATCHES ";"))
+    find_package(lz4 QUIET)
+  endif()
   if(NOT lz4_FOUND AND NOT TARGET LZ4::lz4)
     set(LZ4_BUILD_CLI OFF CACHE INTERNAL "")
     set(LZ4_BUILD_LEGACY_LZ4C OFF CACHE INTERNAL "")

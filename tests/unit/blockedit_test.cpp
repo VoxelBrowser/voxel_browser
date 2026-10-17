@@ -586,6 +586,75 @@ TEST_CASE("punch() hits nothing when no block or player is within reach") {
 	CHECK_FALSE(result.hit_block);
 }
 
+// Phase 6 leftovers: PvP armor, knockback and the swing clip.
+TEST_CASE("punch() scales PvP damage by the victim's armor") {
+	EditWorld w;
+	w.server->set_player_state(
+			w.a_id, Vec3d{ 0, 100, 0 }, vb::core::Vec2f{ 180.0f, 0.0f });
+	w.server->set_player_state(w.b_id, Vec3d{ 0, 100, 3 });
+	w.pump(3);
+	const float before = w.server->player_health(w.b_id)->first;
+
+	w.server->set_player_armor(w.b_id, 0.5f);
+	REQUIRE(w.server->punch(w.a_id).hit_player);
+	const float after = w.server->player_health(w.b_id)->first;
+	CHECK(before - after == doctest::Approx(0.5f));
+
+	// Out-of-range fractions clamp rather than making the victim immune/heal.
+	w.server->set_player_armor(w.b_id, 5.0f);
+	CHECK(*w.server->player_armor(w.b_id) == doctest::Approx(0.95f));
+	w.server->set_player_armor(w.b_id, -1.0f);
+	CHECK(*w.server->player_armor(w.b_id) == doctest::Approx(0.0f));
+}
+
+TEST_CASE("punch() knocks a hit player back only when configured") {
+	EditWorld w;
+	w.server->set_player_state(
+			w.a_id, Vec3d{ 0, 100, 0 }, vb::core::Vec2f{ 180.0f, 0.0f });
+	w.server->set_player_state(w.b_id, Vec3d{ 0, 100, 3 });
+	w.pump(3);
+	w.server->set_player_velocity(w.b_id, Vec3d{});
+
+	REQUIRE(w.server->punch(w.a_id).hit_player);
+	const auto untouched = *w.server->player_velocity(w.b_id);
+	CHECK(untouched.x == doctest::Approx(0.0));
+	CHECK(untouched.z == doctest::Approx(0.0));
+
+	vb::net::ServerSession::PunchParams params;
+	params.knockback_speed = 6.0f;
+	params.knockback_lift = 3.0f;
+	w.server->set_punch_params(params);
+	REQUIRE(w.server->punch(w.a_id).hit_player);
+	const auto pushed = *w.server->player_velocity(w.b_id);
+	// Yaw 180 looks along +z in this fixture (the victim stands at z = 3).
+	CHECK(pushed.z > 5.0);
+	CHECK(pushed.y == doctest::Approx(3.0));
+}
+
+TEST_CASE("punch() plays and then clears the configured swing clip") {
+	EditWorld w;
+	vb::net::ServerSession::PunchParams params;
+	params.swing_clip = "swing";
+	params.swing_clip_seconds = 0.2;
+	w.server->set_punch_params(params);
+	w.server->set_player_state(
+			w.a_id, Vec3d{ 0, 100, 0 }, vb::core::Vec2f{ 0.0f, 0.0f });
+	w.pump(3);
+	CHECK_FALSE(w.server->script_entity_clip(w.a_id).has_value());
+
+	w.server->punch(w.a_id); // whiffs: the swing animates anyway
+	CHECK(w.server->script_entity_clip(w.a_id) == std::optional<std::string>("swing"));
+
+	w.pump(8); // 8 * 0.05s = 0.4s > swing_clip_seconds
+	CHECK_FALSE(w.server->script_entity_clip(w.a_id).has_value());
+
+	// A pack's own clip set after the swing is left alone when it expires.
+	w.server->punch(w.a_id);
+	w.server->set_script_entity_clip(w.a_id, "dance");
+	w.pump(8);
+	CHECK(w.server->script_entity_clip(w.a_id) == std::optional<std::string>("dance"));
+}
+
 // REMAINING_TASKS.md's "no punch-rate cooldown enforced engine-side" gap
 // (PunchParams::punch_cooldown_seconds).
 TEST_CASE("punch() enforces a configured cooldown between swings") {

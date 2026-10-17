@@ -47,6 +47,10 @@ vb.combat = {}
 ---@field heal_after_seconds? number Seconds before a hit block starts healing.
 ---@field heal_interval_seconds? number
 ---@field punch_cooldown_seconds? number
+---@field knockback_speed? number Horizontal m/s a landed PvP punch pushes the victim along the puncher's look direction. 0 (default) disables.
+---@field knockback_lift? number Upward m/s added to that push. 0 by default.
+---@field swing_clip? string Clip from the player kind's `visual.clips` that the puncher plays after every swing (hit or whiff). Empty (default) disables.
+---@field swing_clip_seconds? number How long the swing clip stays set. Default 0.3.
 
 ---@vb context load
 ---Server pack VM only. Overrides punch/combat tunables.

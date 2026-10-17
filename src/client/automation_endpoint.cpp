@@ -138,6 +138,8 @@ const char *widget_type_name(vb::script::WidgetType t) {
 			return "text";
 		case T::kIcon:
 			return "icon";
+		case T::kSprite:
+			return "sprite";
 	}
 	return "unknown";
 }

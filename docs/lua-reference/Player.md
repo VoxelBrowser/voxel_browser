@@ -270,6 +270,36 @@ Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to
 player:add_hunger(5) -- ate food
 ```
 
+## Player:set_armor
+
+`Player:set_armor(fraction)`
+
+context: **runtime**
+
+Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `fraction` | `number` |  |
+
+```lua
+player:set_armor(0.25) -- takes 25% less punch damage
+```
+
+## Player:get_armor
+
+`Player:get_armor() -> number|nil`
+
+context: **runtime**
+
+Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
+
+Returns `number|nil`
+
+```lua
+local armor = player:get_armor() or 0
+```
+
 ## Player:break_block
 
 `Player:break_block(x, y, z) -> boolean`

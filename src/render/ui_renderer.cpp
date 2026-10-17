@@ -1,8 +1,12 @@
 #include "vb/render/ui_renderer.hpp"
 
 #include <cstring>
+#include <fstream>
+#include <iterator>
 
 #include <raygui.h>
+
+#include "vb/core/log.hpp"
 
 namespace vb::render {
 
@@ -11,6 +15,61 @@ namespace {
 constexpr int kTextBoxBufferSize = 256;
 
 } // namespace
+
+UiRenderer::~UiRenderer() {
+	unload_sprite_textures();
+}
+
+void UiRenderer::unload_sprite_textures() {
+	// No window means no GL context, and nothing was ever uploaded.
+	if (IsWindowReady()) {
+		for (auto &[path, tex] : sprite_textures_) {
+			(void)path;
+			if (tex && tex->id != 0) {
+				UnloadTexture(*tex);
+			}
+		}
+	}
+	sprite_textures_.clear();
+}
+
+void UiRenderer::set_pack_source(VirtualFs vfs, std::filesystem::path disk_root) {
+	unload_sprite_textures();
+	pack_vfs_ = std::move(vfs);
+	pack_disk_root_ = std::move(disk_root);
+}
+
+const Texture2D *UiRenderer::sprite_texture(const std::string &path) {
+	if (const auto it = sprite_textures_.find(path); it != sprite_textures_.end()) {
+		return it->second ? &*it->second : nullptr;
+	}
+	std::vector<unsigned char> bytes;
+	if (const auto it = pack_vfs_.find(path); it != pack_vfs_.end()) {
+		bytes.assign(reinterpret_cast<const unsigned char *>(it->second.data()),
+				reinterpret_cast<const unsigned char *>(it->second.data()) + it->second.size());
+	} else if (!pack_disk_root_.empty() && path.find("..") == std::string::npos) {
+		std::ifstream f(pack_disk_root_ / path, std::ios::binary);
+		if (f) {
+			bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
+		}
+	}
+	std::optional<Texture2D> loaded;
+	if (bytes.empty()) {
+		VB_WARN("render", "ui sprite: texture '", path, "' not found in the pack");
+	} else {
+		Image img = LoadImageFromMemory(".png", bytes.data(), static_cast<int>(bytes.size()));
+		if (img.data == nullptr) {
+			VB_WARN("render", "ui sprite: failed to decode '", path, "'");
+		} else {
+			loaded = LoadTextureFromImage(img);
+			UnloadImage(img);
+			SetTextureFilter(*loaded, TEXTURE_FILTER_POINT); // pixel art
+		}
+	}
+	const auto [it, inserted] = sprite_textures_.emplace(path, std::move(loaded));
+	(void)inserted;
+	return it->second ? &*it->second : nullptr;
+}
 
 UiFrameResult UiRenderer::draw(std::string_view ui_name,
 		const std::vector<script::Widget> &widgets, const ChunkRenderer *atlas_source) {
@@ -111,6 +170,16 @@ UiFrameResult UiRenderer::draw(std::string_view ui_name,
 					DrawRectangle(static_cast<int>(w.x), static_cast<int>(w.y),
 							static_cast<int>(w.w), static_cast<int>(w.h),
 							fallback_color_for(static_cast<std::uint32_t>(w.item)));
+				}
+				break;
+			}
+			case script::WidgetType::kSprite: {
+				if (const Texture2D *tex = sprite_texture(w.texture)) {
+					const Rectangle src{ w.src_x, w.src_y,
+						w.src_w > 0.0f ? w.src_w : static_cast<float>(tex->width),
+						w.src_h > 0.0f ? w.src_h : static_cast<float>(tex->height) };
+					DrawTexturePro(*tex, src, bounds, Vector2{ 0, 0 }, 0.0f,
+							Color{ w.fill_r, w.fill_g, w.fill_b, w.fill_a });
 				}
 				break;
 			}

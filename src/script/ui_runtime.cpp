@@ -172,6 +172,9 @@ WidgetType widget_type_from(const std::string &s) {
 	if (s == "icon") {
 		return WidgetType::kIcon;
 	}
+	if (s == "sprite") {
+		return WidgetType::kSprite;
+	}
 	if (s != "label") {
 		VB_WARN("script", "ui: unknown widget type '", s, "', treating as label");
 	}
@@ -207,6 +210,16 @@ Widget widget_from_table(const sol::table &wt) {
 	// kIcon only: `item`, a registered block/item id -- the same numeric id
 	// `player:get_inventory()`/`vb.world.set_block` already use elsewhere.
 	w.item = static_cast<core::BlockId>(wt.get_or("item", std::uint16_t{ 0 }));
+	// kSprite only: `texture` and an optional `src = {x, y, w, h}` crop.
+	w.texture = wt.get_or("texture", std::string{});
+	sol::object src_obj = wt["src"];
+	if (src_obj.get_type() == sol::type::table) {
+		sol::table src = src_obj.as<sol::table>();
+		w.src_x = src.get_or(1, 0.0f);
+		w.src_y = src.get_or(2, 0.0f);
+		w.src_w = src.get_or(3, 0.0f);
+		w.src_h = src.get_or(4, 0.0f);
+	}
 	const std::string align_str = wt.get_or("align", std::string("left"));
 	if (align_str == "right") {
 		w.align = TextAlign::kRight;
@@ -434,6 +447,45 @@ void UiRuntime::Impl::install_bindings() {
 		return t;
 	};
 	client_tbl["selected_slot"] = [this]() -> int { return selected_slot; };
+	// The local player's own appearance (player:set_visual_override on the
+	// server), or nil when the pack set none: {texture=, frame_width=,
+	// frame_height=, facings=, layers = {{texture=, below=, rows=,
+	// tint={r,g,b,a}}, ...}}, with only the fields the override sets. Feed
+	// `texture`/`layers[i].texture` to `sprite` widgets for a preview.
+	client_tbl["my_appearance"] = [this]() -> sol::object {
+		const protocol::EntityVisualOverride *ov =
+				session != nullptr ? session->my_visual_override() : nullptr;
+		if (ov == nullptr) {
+			return sol::make_object(lua_state(), sol::lua_nil);
+		}
+		sol::table t = lua_state().create_table();
+		if (ov->texture) {
+			t["texture"] = *ov->texture;
+		}
+		if (ov->frame_width) {
+			t["frame_width"] = *ov->frame_width;
+		}
+		if (ov->frame_height) {
+			t["frame_height"] = *ov->frame_height;
+		}
+		if (ov->facings) {
+			t["facings"] = *ov->facings;
+		}
+		if (ov->layers) {
+			sol::table layers = lua_state().create_table();
+			int i = 1;
+			for (const auto &l : *ov->layers) {
+				sol::table lt = lua_state().create_table();
+				lt["texture"] = l.texture;
+				lt["below"] = l.below;
+				lt["rows"] = l.rows;
+				lt["tint"] = lua_state().create_table_with(1, l.tint[0], 2, l.tint[1], 3, l.tint[2], 4, l.tint[3]);
+				layers[i++] = lt;
+			}
+			t["layers"] = layers;
+		}
+		return t;
+	};
 	// {current=, max=} each, or nil before the server's first status arrives.
 	client_tbl["health"] = [this]() -> sol::object {
 		if (!player_status) {

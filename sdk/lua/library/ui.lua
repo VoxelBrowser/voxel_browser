@@ -2,7 +2,7 @@
 -- Client UI VM: screens and the always-on HUD. Files in a pack's `ui/` folder run here, NOT in the
 -- server VM: `vb` is nil in `ui/*.lua`, and `ui`/`client` are nil in server files.
 
----@alias WidgetType "label"|"panel"|"button"|"textbox"|"list"|"rect"|"text"|"icon"
+---@alias WidgetType "label"|"panel"|"button"|"textbox"|"list"|"rect"|"text"|"icon"|"sprite"
 ---@alias Rgba integer[] `{r, g, b, a?}`, 0-255 each.
 
 ---@class Widget
@@ -20,6 +20,8 @@
 ---@field font_size? integer `text` only (default 16).
 ---@field align? "left"|"center"|"right" `text` only: `x` anchors this edge/point.
 ---@field item? BlockId `icon` only: block/item id drawn from the atlas.
+---@field texture? string `sprite` only: pack-relative PNG path, e.g. `"textures/skins/red.png"`.
+---@field src? number[] `sprite` only: `{x, y, w, h}` pixel crop of the image (default: the whole image). `color` tints it.
 ---@field on_click? fun() Called when a button is clicked.
 ---@field on_change? fun(value: string|integer) Called when a textbox/list changes.
 
@@ -184,6 +186,15 @@ function client.inventory() end
 ---```
 ---@return integer
 function client.selected_slot() end
+
+---@vb context ui
+---Client UI VM only. The local player's own appearance as set by `player:set_visual_override`, or `nil` when the pack set none. Only the fields the override sets are present. Feed `texture` / `layers[i].texture` to `sprite` widgets for a wardrobe preview.
+---```lua
+---local me = client.my_appearance()
+---if me and me.layers then print(#me.layers, "layers") end
+---```
+---@return {texture?: string, frame_width?: integer, frame_height?: integer, facings?: integer, layers?: {texture: string, below: boolean, rows: integer, tint: integer[]}[]}|nil
+function client.my_appearance() end
 
 ---@vb context ui
 ---Client UI VM only. Local health, or `nil` before the first status arrives.

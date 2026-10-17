@@ -81,7 +81,8 @@ TEST_CASE("content/base block textures resolve to real files under content/base/
 	BasePackFixture fx("c1_textures");
 	auto &reg = fx.registry();
 
-	const char *textured[] = { "base:stone", "base:water" };
+	const char *textured[] = { "base:stone", "base:water", "base:dirt", "base:grass", "base:sand",
+		"base:wood", "base:leaves", "base:planks", "base:sticks" };
 	for (const char *name : textured) {
 		const auto id = reg.find(name);
 		REQUIRE(id != vb::world::base_block::air);
@@ -90,12 +91,6 @@ TEST_CASE("content/base block textures resolve to real files under content/base/
 		CHECK_FALSE(texture.starts_with('/'));
 		const auto path = vb::test::content_base_dir() / texture;
 		CHECK_MESSAGE(std::filesystem::exists(path), path.string());
-	}
-
-	// Every other block carries no texture (flat-color fallback).
-	for (const char *name : { "base:dirt", "base:grass", "base:sand",
-				 "base:wood", "base:leaves", "base:planks", "base:sticks" }) {
-		CHECK(reg.get(reg.find(name)).texture.empty());
 	}
 }
 

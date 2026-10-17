@@ -309,6 +309,51 @@ TEST_CASE("ui \"icon\" widget with no item field defaults to air") {
 	CHECK(widgets[0].item == vb::core::BlockId::kAir);
 }
 
+TEST_CASE("ui.define with a \"sprite\" widget carries its texture, crop and tint") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		ui.define("test", function(state)
+			return {
+				widgets = {
+					{ id = "whole", type = "sprite", x = 4, y = 6, w = 64, h = 64,
+						texture = "textures/skins/red.png" },
+					{ id = "frame", type = "sprite", x = 80, y = 6, w = 64, h = 64,
+						texture = "textures/player.png", src = { 128, 0, 128, 128 },
+						color = { 200, 100, 50, 255 } },
+				},
+			}
+		end)
+	)"));
+	ui.open("test", "{}");
+	const auto &widgets = ui.render_frame();
+	REQUIRE(widgets.size() == 2);
+	CHECK(widgets[0].type == WidgetType::kSprite);
+	CHECK(widgets[0].texture == "textures/skins/red.png");
+	// No `src`: a non-positive size means "the whole image".
+	CHECK(widgets[0].src_w <= 0.0f);
+	CHECK(widgets[0].fill_r == 255);
+	CHECK(widgets[1].src_x == doctest::Approx(128.0f));
+	CHECK(widgets[1].src_w == doctest::Approx(128.0f));
+	CHECK(widgets[1].src_h == doctest::Approx(128.0f));
+	CHECK(widgets[1].fill_r == 200);
+	CHECK(widgets[1].fill_g == 100);
+}
+
+TEST_CASE("client.my_appearance() is nil when no session is attached") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		ui.define("test", function(state)
+			local mine = client.my_appearance()
+			return { widgets = { { id = mine == nil and "none" or "some", type = "label",
+				x = 0, y = 0, w = 1, h = 1 } } }
+		end)
+	)"));
+	ui.open("test", "{}");
+	const auto &widgets = ui.render_frame();
+	REQUIRE(widgets.size() == 1);
+	CHECK(widgets[0].id == "none");
+}
+
 TEST_CASE("render_hud() is a safe no-op when no HUD was ever registered "
 		"(Phase 6.16)") {
 	UiRuntime ui;

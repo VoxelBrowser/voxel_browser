@@ -25,6 +25,8 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`Player:set_visual_override(override)`](Player.md#player-set-visual-override) — Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any `EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every client in range sees it within a tick or two, including clients that come into range later and the player's own third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
 - [`Player:get_hunger() -> {current:`](Player.md#player-get-hunger) — Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 - [`Player:add_hunger(amount)`](Player.md#player-add-hunger) — Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to `[0, max]`.
+- [`Player:set_armor(fraction)`](Player.md#player-set-armor) — Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+- [`Player:get_armor() -> number|nil`](Player.md#player-get-armor) — Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
 - [`Player:break_block(x, y, z) -> boolean`](Player.md#player-break-block) — Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
 - [`Player:place_block(x, y, z, block) -> boolean`](Player.md#player-place-block) — Server pack VM only. Places `block` through the validated pipeline.
 - [`Player:punch(block_damage) -> PunchResult`](Player.md#player-punch) — Server pack VM only. Throws one punch along the player's look direction (players or blocks, whichever is closer).
@@ -74,6 +76,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`client.mouse_captured() -> boolean`](client.md#client-mouse-captured) — Client UI VM only. Whether the mouse is captured (looking around) right now.
 - [`client.inventory() -> {name:`](client.md#client-inventory) — Client UI VM only. Inventory slots (`item` 0 = empty); live.
 - [`client.selected_slot() -> integer`](client.md#client-selected-slot) — Client UI VM only. 1-based selected hotbar slot.
+- [`client.my_appearance() -> {texture?:`](client.md#client-my-appearance) — Client UI VM only. The local player's own appearance as set by `player:set_visual_override`, or `nil` when the pack set none. Only the fields the override sets are present. Feed `texture` / `layers[i].texture` to `sprite` widgets for a wardrobe preview.
 - [`client.health() -> {current:`](client.md#client-health) — Client UI VM only. Local health, or `nil` before the first status arrives.
 - [`client.hunger() -> {current:`](client.md#client-hunger) — Client UI VM only. Local hunger, or `nil` before the first status arrives.
 

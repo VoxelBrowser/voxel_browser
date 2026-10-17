@@ -1398,6 +1398,26 @@ struct PlayerHandle {
 		return sol::make_object(lua, *h);
 	}
 
+	// PvP armor: fraction of "pvp" damage absorbed, clamped to [0, 0.95]
+	// engine-side (ServerSession::set_player_armor).
+	void set_armor(double fraction) const {
+		if (rt->session == nullptr) {
+			throw sol::error("entity:set_armor(): session not attached yet");
+		}
+		rt->session->set_player_armor(net_id, static_cast<float>(fraction));
+	}
+	sol::object get_armor(sol::this_state ts) const {
+		sol::state_view lua(ts);
+		if (rt->session == nullptr) {
+			throw sol::error("entity:get_armor(): session not attached yet");
+		}
+		const auto a = rt->session->player_armor(net_id);
+		if (!a) {
+			return sol::lua_nil;
+		}
+		return sol::make_object(lua, *a);
+	}
+
 	// `{current=, max=}`, the same shape entity:get_health() returns for a
 	// script entity, or nil if the player is already gone. Read-only: lowering
 	// goes through damage() (so death/respawn hooks fire), there is no setter.
@@ -1566,7 +1586,8 @@ void PackRuntime::Impl::install_bindings() {
 			&PlayerHandle::punch, "get_selected_slot",
 			&PlayerHandle::get_selected_slot, "get_held_item",
 			&PlayerHandle::get_held_item, "get_hunger", &PlayerHandle::get_hunger,
-			"add_hunger", &PlayerHandle::add_hunger, "get_health",
+			"add_hunger", &PlayerHandle::add_hunger, "set_armor",
+			&PlayerHandle::set_armor, "get_armor", &PlayerHandle::get_armor, "get_health",
 			&PlayerHandle::get_health, "set_visual_override",
 			&PlayerHandle::set_visual_override);
 
@@ -3234,6 +3255,10 @@ net::ServerSession::PunchParams PackRuntime::effective_punch_params(
 			def.get_or("heal_interval_seconds", out.heal_interval_seconds);
 	out.punch_cooldown_seconds =
 			def.get_or("punch_cooldown_seconds", out.punch_cooldown_seconds);
+	out.knockback_speed = def.get_or("knockback_speed", out.knockback_speed);
+	out.knockback_lift = def.get_or("knockback_lift", out.knockback_lift);
+	out.swing_clip = def.get_or("swing_clip", out.swing_clip);
+	out.swing_clip_seconds = def.get_or("swing_clip_seconds", out.swing_clip_seconds);
 	return out;
 }
 

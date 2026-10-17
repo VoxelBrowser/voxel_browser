@@ -172,6 +172,21 @@ Returns `integer`
 local slot = client.selected_slot()
 ```
 
+## client.my_appearance
+
+`client.my_appearance() -> {texture?:`
+
+context: **ui**
+
+Client UI VM only. The local player's own appearance as set by `player:set_visual_override`, or `nil` when the pack set none. Only the fields the override sets are present. Feed `texture` / `layers[i].texture` to `sprite` widgets for a wardrobe preview.
+
+Returns `{texture?:` — string, frame_width?: integer, frame_height?: integer, facings?: integer, layers?: {texture: string, below: boolean, rows: integer, tint: integer[]}[]}|nil
+
+```lua
+local me = client.my_appearance()
+if me and me.layers then print(#me.layers, "layers") end
+```
+
 ## client.health
 
 `client.health() -> {current:`
