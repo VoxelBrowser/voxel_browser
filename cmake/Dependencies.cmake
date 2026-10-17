@@ -311,7 +311,9 @@ if(VB_WITH_NET)
       # Its bundled donna crypto also calls __emulu(), which MSVC/ARM64 declares
       # but doesn't implement (unresolved external at link time).
       add_library(vb_arm64_msvc_shims STATIC "${CMAKE_CURRENT_LIST_DIR}/shims/arm64_msvc_emulu.c")
-      target_link_libraries(GameNetworkingSockets_s PUBLIC vb_arm64_msvc_shims)
+      # BUILD_INTERFACE: GNS's install(EXPORT) rejects a dependency that isn't in
+      # its export set, and we never install it.
+      target_link_libraries(GameNetworkingSockets_s PUBLIC "$<BUILD_INTERFACE:vb_arm64_msvc_shims>")
     endif()
   endif()
 endif()
