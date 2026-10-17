@@ -85,7 +85,7 @@ Everything below is currently unasserted anywhere:
   `ui/hud.lua` would pass the entire suite and ship. The hotbar, chat log,
   player list, break-progress bar, inventory slot grid, empty-inventory
   label and both close buttons are unverified.
-- **Textures.** `textures/{stone,water,player,dropped_item}.png` are
+- **Textures.** `textures/{stone,water,dirt,grass,sand,wood,planks,leaves,sticks,player,dropped_item}.png` are
   referenced by name from Lua; nothing checks the referenced files exist, or
   that they reach a client through asset sync.
 

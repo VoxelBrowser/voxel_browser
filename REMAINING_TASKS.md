@@ -118,8 +118,8 @@ Full detail: `remaining_tasks/phase4.md`.
       (spawn-time only — no live update/clear path), real base-pack art, the
       texture atlas, manifest staleness fix (not for `--singleplayer`), and the
       `icon` item-grid widget.
-- [ ] Follow-up: full base-pack reskin (dirt/grass/sand/wood/leaves) — only
-      `base:stone`/`base:water` use real textures so far.
+- [x] Full base-pack reskin (2026-10-17): dirt/grass/sand/wood/planks/leaves/
+      sticks now have 16x16 textures (`scripts/gen_base_textures.py`).
 
 ---
 

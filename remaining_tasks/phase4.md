@@ -435,6 +435,9 @@ Lua-defined UI.
       "compose it in Lua" posture Phase 6.16 already gave the hold-to-break
       progress bar out of `rect`. See `STATE.md` history (`state/changelog-*.md`) for the
       full writeup.
+- [x] Base-pack reskin done 2026-10-17: every `content/base` block has a texture
+      (`scripts/gen_base_textures.py` regenerates dirt/grass/sand/wood/planks/
+      leaves/sticks; one texture per block, all faces).
 - [x] Real texture/atlas system landed 2026-09-23 (see
       `state/changelog-recent.md`): `vb.register_block{texture=...}` ->
       `S2C_BlockRegistry` -> a per-session `vb::render::TextureAtlas` built
