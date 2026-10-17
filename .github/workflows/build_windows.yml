@@ -12,20 +12,25 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # A failing arm64 leg shouldn't cancel the x86_64 legs mid-build.
+      fail-fast: false
       matrix:
         target: [windows]
-        arch: [x86_64]
+        arch: [x86_64, arm64]
         build_type: [release, debug]
         include:
           - build_type: release
             cmake_build_type_keyword: Release
           - build_type: debug
             cmake_build_type_keyword: RelWithDebInfo
-          - os: windows-latest
-            target: windows
-          - target: windows
-            arch: x86_64
+          - arch: x86_64
+            os: windows-latest
             cmake_arch_keyword: x64
+            vcpkg_triplet: x64-windows
+          - arch: arm64
+            os: windows-11-arm
+            cmake_arch_keyword: arm64
+            vcpkg_triplet: arm64-windows
 
     steps:
       - name: Check out code
@@ -42,7 +47,7 @@ jobs:
         # protobuf's own CMake only emits a discoverable config as part of an
         # install step, so FetchContent-ing its source doesn't work (see
         # cmake/Dependencies.cmake) — a real package manager install is needed.
-        run: "%VCPKG_INSTALLATION_ROOT%\\vcpkg install protobuf:x64-windows"
+        run: "%VCPKG_INSTALLATION_ROOT%\\vcpkg install protobuf:${{ matrix.vcpkg_triplet }}"
 
       - name: Configure
         shell: cmd
@@ -56,6 +61,7 @@ jobs:
             -DVB_WITH_REPLICATION=ON ^
             -DVB_WITH_COMPRESSION=ON ^
             -DVB_DISTRIBUTION=ON ^
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }} ^
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake
 
       - name: Build

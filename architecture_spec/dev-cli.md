@@ -533,7 +533,7 @@ Nothing can be downloaded reliably until this lands.
       client's protocol with a locally managed server's.
 - [~] Linux arm64 / Windows arm64 artifacts: `vb`, both install scripts and the
       packaging scripts understand `linux-arm64` / `windows-arm64`; the CI legs
-      that build them are **not added** (see below).
+      that build them were added 2026-10-17 but have not run yet (see below).
 
 #### Release signing
 
@@ -601,14 +601,14 @@ handshake stays the authority. A server on another machine is invisible to
 #### arm64
 
 Platform strings are `linux-arm64` and `windows-arm64` (macOS stays
-`macos-universal`). Everything that reads them is ready; the CI legs are not
-added because they cannot be verified from here and a hosted-runner label that
-does not exist for this repository would block `bundle`/`publish` for every
-release. To add them: in `build_linux.yml` set `arch: [x86_64, arm64]`, give the
-x86_64 leg `os: ubuntu-latest` and the arm64 leg `os: ubuntu-24.04-arm`, and
-`exclude` arm64 + asan/tsan; in `build_windows.yml` add an arm64 leg on
-`windows-11-arm` with the matching vcpkg triplet (`arm64-windows`) and
-`vcvarsall` arch. Then tag a release and check `vb install` on such a machine.
+`macos-universal`). The CI legs exist (2026-10-17): `build_linux.yml` runs
+`arch: [x86_64, arm64]` with the arm64 leg on `ubuntu-24.04-arm` (no
+asan/tsan), and `build_windows.yml` adds an arm64 leg on `windows-11-arm` using
+vcpkg's `arm64-windows` triplet and the `arm64` MSVC environment. Both
+matrices set `fail-fast: false`, so an arm64 problem doesn't cancel the other
+legs; `bundle`/`publish` still need every leg green. Not yet verified: that
+those runners build the full dependency set, and `vb install` on a real arm64
+machine after tagging a release.
 
 ## 12. Open questions
 

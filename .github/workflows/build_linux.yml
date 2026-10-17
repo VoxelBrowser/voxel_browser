@@ -12,10 +12,18 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # A failing arm64 leg shouldn't cancel the x86_64 legs mid-build.
+      fail-fast: false
       matrix:
         target: [linux]
-        arch: [x86_64]
+        arch: [x86_64, arm64]
         build_type: [release, debug, asan, tsan]
+        exclude:
+          # Sanitizer coverage stays x86_64-only; arm64 is for release archives.
+          - arch: arm64
+            build_type: asan
+          - arch: arm64
+            build_type: tsan
         include:
           - build_type: release
             cmake_build_type_keyword: Release
@@ -29,11 +37,11 @@ jobs:
           - build_type: tsan
             cmake_build_type_keyword: RelWithDebInfo
             sanitizer_cmake_flags: -DVB_ENABLE_TSAN=ON
-          - os: ubuntu-latest
-            target: linux
-          - target: linux
-            arch: x86_64
+          - arch: x86_64
+            os: ubuntu-latest
             cxxflags: -m64
+          - arch: arm64
+            os: ubuntu-24.04-arm
 
     steps:
       - name: Check out code
