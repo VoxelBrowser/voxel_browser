@@ -302,6 +302,13 @@ if(VB_WITH_NET)
       # Skip the webrtc submodule (only needed by ICE, which is off above).
       GIT_SUBMODULES "src/external/abseil;src/external/vjson")
     FetchContent_MakeAvailable(gamenetworkingsockets)
+    # v1.6.0's minbase_identify.h only recognises x86 under MSVC and hits
+    # `#error "Cannot determine endianness of platform!"` on Windows/ARM64.
+    # ARM64 Windows is little-endian; say so for the GNS target (and whatever
+    # links it) rather than patching the fetched sources.
+    if(MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" AND TARGET GameNetworkingSockets_s)
+      target_compile_definitions(GameNetworkingSockets_s PUBLIC VALVE_LITTLE_ENDIAN=1)
+    endif()
   endif()
 endif()
 
