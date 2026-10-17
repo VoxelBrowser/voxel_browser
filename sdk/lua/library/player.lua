@@ -164,6 +164,22 @@ function Player:get_hunger() end
 function Player:add_hunger(amount) end
 
 ---@vb context runtime
+---Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+---```lua
+---player:set_armor(0.25) -- takes 25% less punch damage
+---```
+---@param fraction number
+function Player:set_armor(fraction) end
+
+---@vb context runtime
+---Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
+---```lua
+---local armor = player:get_armor() or 0
+---```
+---@return number|nil
+function Player:get_armor() end
+
+---@vb context runtime
 ---Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
 ---```lua
 ---local ok = player:break_block(10, 64, 10)

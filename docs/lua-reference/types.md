@@ -92,6 +92,10 @@ integer Numeric block id. A held item and a placeable block share one id space.
 | `heal_after_seconds?` | `number` | Seconds before a hit block starts healing. |
 | `heal_interval_seconds?` | `number` |  |
 | `punch_cooldown_seconds?` | `number` |  |
+| `knockback_speed?` | `number` | Horizontal m/s a landed PvP punch pushes the victim along the puncher's look direction. 0 (default) disables. |
+| `knockback_lift?` | `number` | Upward m/s added to that push. 0 by default. |
+| `swing_clip?` | `string` | Clip from the player kind's `visual.clips` that the puncher plays after every swing (hit or whiff). Empty (default) disables. |
+| `swing_clip_seconds?` | `number` | How long the swing clip stays set. Default 0.3. |
 
 ## CombineDef
 
@@ -425,9 +429,11 @@ integer[] `{r, g, b, a?}`, 0-255 each.
 | `font_size?` | `integer` | `text` only (default 16). |
 | `align?` | `"left"|"center"|"right"` | `text` only: `x` anchors this edge/point. |
 | `item?` | `BlockId` | `icon` only: block/item id drawn from the atlas. |
+| `texture?` | `string` | `sprite` only: pack-relative PNG path, e.g. `"textures/skins/red.png"`. |
+| `src?` | `number[]` | `sprite` only: `{x, y, w, h}` pixel crop of the image (default: the whole image). `color` tints it. |
 | `on_click?` | `fun()` | Called when a button is clicked. |
 | `on_change?` | `fun(value:` | string|integer) Called when a textbox/list changes. |
 
 ## WidgetType
 
-"label"|"panel"|"button"|"textbox"|"list"|"rect"|"text"|"icon"
+"label"|"panel"|"button"|"textbox"|"list"|"rect"|"text"|"icon"|"sprite"

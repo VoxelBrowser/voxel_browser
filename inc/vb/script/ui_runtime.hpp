@@ -62,6 +62,13 @@ enum class WidgetType : std::uint8_t {
 	// raylib's own tint parameter -- lets content grey out an unusable
 	// slot without a second widget on top.
 	kIcon,
+	// A pack texture (`texture`, a pack-relative path such as
+	// "textures/skins/red.png") drawn at (x, y, w, h), optionally cropped to
+	// the pixel rectangle `src = {x, y, w, h}` of the image (default: the
+	// whole image) -- one frame of a spritesheet, a portrait, a wardrobe
+	// swatch. `color` tints it like kIcon's. A paper-doll preview is several
+	// of these stacked, one per layer of client.my_appearance().
+	kSprite,
 };
 
 // kText only: `x` is the anchor edge/point `align` is relative to, not
@@ -87,6 +94,8 @@ struct Widget {
 	int font_size = 16; // kText only
 	TextAlign align = TextAlign::kLeft; // kText only
 	core::BlockId item = core::BlockId::kAir; // kIcon only
+	std::string texture; // kSprite only: pack-relative path
+	float src_x = 0, src_y = 0, src_w = 0, src_h = 0; // kSprite only; src_w/src_h <= 0 = whole image
 };
 
 class UiRuntime {

@@ -143,7 +143,7 @@ Full detail: `remaining_tasks/phase5.md`.
 
 ---
 
-## Phase 6 — Lua-Driven Extensibility ✅ 6.1–6.16, 6.18, 6.20–6.21 done; 6.17 superseded
+## Phase 6 — Lua-Driven Extensibility ✅ all done; 6.17 superseded
 
 Goal: content packs override/extend engine defaults the way block
 registration already does — biomes, entities, UI, input, data. Landed:
@@ -178,13 +178,14 @@ Full detail: `remaining_tasks/phase6.md`.
       `entity:set_clip`, `entity:attach_to`/`detach`, sprite `layer`/
       `through_walls`, alpha-cutout + back-to-front entity drawing
       (all `S2C_EntityProps`, protocol 32).
-- [ ] Still open: no swing animation, no PvP armor/knockback.
+- [x] Swing animation (`PunchParams::swing_clip`, base pack plays `swing`),
+      PvP armor (`player:set_armor`) and knockback (`vb.combat.set_params`
+      `knockback_speed`/`knockback_lift`) -- 2026-10-17.
 - [x] Paper-doll appearance (protocol 32): visual `layers` (below/rows/
       tint), `player:`/`entity:set_visual_override` at runtime, own outfit
       via the F5 third-person camera (`vb.render.set_third_person`).
-- [ ] UI `sprite` widget (wardrobe/preview screens) and a
-      `client.my_appearance()` UI binding -- the client side already has
-      `ClientSession::my_visual_override()`.
+- [x] UI `sprite` widget (texture + optional `src` crop + tint) and
+      `client.my_appearance()` -- 2026-10-17. No protocol change.
 
 ---
 

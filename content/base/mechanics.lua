@@ -26,6 +26,10 @@
 local was_down = {}
 local was_secondary_down = {}
 
+-- Every swing, hit or whiff, plays base:player's "swing" clip (entities/
+-- player.lua) on the puncher for every client that can see them.
+vb.combat.set_params({ swing_clip = "swing" })
+
 -- REMAINING_TASKS.md 6.20: right-click placing used to be the one remaining
 -- hardcoded block edit -- src/client/main.cpp sent a C2S_BlockEdit{kPlace}
 -- directly off MOUSE_BUTTON_RIGHT with a hardcoded stone block, no pack seam

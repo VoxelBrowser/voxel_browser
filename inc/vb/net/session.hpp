@@ -161,6 +161,11 @@ public:
 	// Phase 4.2 (Lua entity/player API): directly set a connected player's
 	// authoritative velocity. No-op if `id` isn't a playing connection.
 	void set_player_velocity(core::NetId id, core::Vec3d vel);
+	// Read-back of the above; nullopt if `id` isn't a playing connection.
+	std::optional<core::Vec3d> player_velocity(core::NetId id) const;
+	// The clip override currently replicated for a player/script entity
+	// (entity:set_clip, PunchParams::swing_clip); nullopt if none.
+	std::optional<std::string> script_entity_clip(core::NetId id) const;
 
 	// Transport-level connection for a playing net id (kInvalid if not
 	// found/not playing) — lets a script host send arbitrary framed messages
@@ -512,9 +517,32 @@ public:
 		// entirely, so every existing direct-punch() call site/test is
 		// unaffected unless a pack opts in via vb.combat.set_params.
 		double punch_cooldown_seconds = 0.0;
+		// PvP knockback: a landed player hit sets the victim's velocity to
+		// `knockback_speed` m/s horizontally, away from the puncher along the
+		// puncher's look direction, plus `knockback_lift` m/s upward. Normal
+		// movement acceleration (physics::MoveParams::accel) then bleeds the
+		// horizontal part off. `<= 0.0` (the default) disables it, same
+		// opt-in posture as punch_cooldown_seconds. Armor does not reduce it.
+		float knockback_speed = 0.0f;
+		float knockback_lift = 0.0f;
+		// Swing animation: every punch() that clears the cooldown (hit or
+		// whiff) sets the puncher's replicated clip override to `swing_clip`
+		// for `swing_clip_seconds`, so every client that sees them plays that
+		// clip from the kind's `visual.clips`. Empty (the default) disables
+		// it. The override is cleared afterwards unless a pack replaced it
+		// with its own entity:set_clip in the meantime.
+		std::string swing_clip;
+		double swing_clip_seconds = 0.3;
 	};
 	void set_punch_params(PunchParams p) { punch_params_ = p; }
 	const PunchParams &punch_params() const { return punch_params_; }
+
+	// PvP armor: the fraction (clamped to [0, 0.95]) of "pvp"-cause damage a
+	// player shrugs off. 0 (the default for every new player) means none.
+	// Persists across respawn; the pack that handed it out owns resetting it.
+	// No-op / nullopt if `id` isn't a playing connection.
+	void set_player_armor(core::NetId id, float fraction);
+	std::optional<float> player_armor(core::NetId id) const;
 
 	struct PunchResult {
 		bool hit_player = false;
@@ -603,6 +631,10 @@ private:
 		// per-tick refill loop just above it). Meaningless while
 		// punch_cooldown_seconds <= 0.0 (never armed, so never checked).
 		double punch_cooldown_remaining = 0.0;
+		// set_player_armor(): fraction of PvP damage absorbed.
+		float armor = 0.0f;
+		// PunchParams::swing_clip's countdown; the clip is cleared at 0.
+		double swing_clip_remaining = 0.0;
 		bool playing = false;
 		bool input_driven = false;
 		core::NetId net_id = core::NetId::kInvalid;
