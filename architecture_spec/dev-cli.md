@@ -601,14 +601,25 @@ handshake stays the authority. A server on another machine is invisible to
 #### arm64
 
 Platform strings are `linux-arm64` and `windows-arm64` (macOS stays
-`macos-universal`). The CI legs exist (2026-10-17): `build_linux.yml` runs
-`arch: [x86_64, arm64]` with the arm64 leg on `ubuntu-24.04-arm` (no
-asan/tsan), and `build_windows.yml` adds an arm64 leg on `windows-11-arm` using
-vcpkg's `arm64-windows` triplet and the `arm64` MSVC environment. Both
-matrices set `fail-fast: false`, so an arm64 problem doesn't cancel the other
-legs; `bundle`/`publish` still need every leg green. Not yet verified: that
-those runners build the full dependency set, and `vb install` on a real arm64
-machine after tagging a release.
+`macos-universal`). Everything that reads them is ready.
+
+- **linux-arm64: shipped (2026-10-17).** `build_linux.yml` builds
+  `arch: [x86_64, arm64]`, the arm64 leg on `ubuntu-24.04-arm` (release and
+  debug only, no asan/tsan). Built, tested and packaged green in CI.
+  `fail-fast: false` keeps one leg's failure from cancelling the others.
+  Still untested: `vb install` on a real arm64 machine after a release.
+- **windows-arm64: not built.** It was tried on `windows-11-arm` (vcpkg
+  `arm64-windows`, MSVC `arm64`). Fixed along the way, all guarded to MSVC
+  ARM64: GameNetworkingSockets' endianness check
+  (`VALVE_LITTLE_ENDIAN`), librg/zpl's x86-only `__rdtsc`
+  (`src/replication/librg_impl.c`), and GNS's donna crypto needing `__emulu`
+  (`cmake/shims/arm64_msvc_emulu.c`). It now compiles, links and runs, with 806
+  of 812 unit tests passing, but the six real-UDP `GnsTransport` tests never
+  connect, so it can't be released. The leg was removed from
+  `build_windows.yml` (its comment has the entry to put back) because
+  `bundle` needs every leg green. Next step is debugging GNS's connection
+  setup on ARM64 Windows (suspect the bundled ed25519/curve25519 donna
+  code paths chosen for an unrecognised architecture).
 
 ## 12. Open questions
 

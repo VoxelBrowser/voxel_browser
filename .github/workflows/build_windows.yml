@@ -12,11 +12,17 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
-      # A failing arm64 leg shouldn't cancel the x86_64 legs mid-build.
-      fail-fast: false
+      # windows-arm64 is deliberately not built yet: it compiles and links (see
+      # cmake/Dependencies.cmake, src/replication/librg_impl.c, cmake/shims) but
+      # the real-UDP GnsTransport tests fail there, and this job feeds `bundle`.
+      # Re-add `arm64` + the include below once they pass on windows-11-arm:
+      #   - arch: arm64
+      #     os: windows-11-arm
+      #     cmake_arch_keyword: arm64
+      #     vcpkg_triplet: arm64-windows
       matrix:
         target: [windows]
-        arch: [x86_64, arm64]
+        arch: [x86_64]
         build_type: [release, debug]
         include:
           - build_type: release
@@ -27,10 +33,6 @@ jobs:
             os: windows-latest
             cmake_arch_keyword: x64
             vcpkg_triplet: x64-windows
-          - arch: arm64
-            os: windows-11-arm
-            cmake_arch_keyword: arm64
-            vcpkg_triplet: arm64-windows
 
     steps:
       - name: Check out code

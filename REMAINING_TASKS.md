@@ -233,10 +233,10 @@ surface and per-phase task lists: `architecture_spec/dev-cli.md` §11.
       `install.sh`; **inactive until the maintainer adds a key to
       `release_keys.txt` and the `RELEASE_SIGNING_KEY` secret** — steps in
       `architecture_spec/dev-cli.md`), `vb server service print`,
-      `vb launch --connect` protocol warning. arm64: `linux-arm64` and
-      `windows-arm64` CI legs added 2026-10-17 (`ubuntu-24.04-arm`,
-      `windows-11-arm`; no sanitizer legs) -- **not yet verified by a real
-      run; a `vb install` on an arm64 machine is still untested.**
+      `vb launch --connect` protocol warning. arm64: `linux-arm64` ships (CI leg
+      green, 2026-10-17; `vb install` on real hardware untested).
+      `windows-arm64` builds but the real-UDP `GnsTransport` tests fail, so
+      its CI leg is removed -- see `architecture_spec/dev-cli.md` (arm64).
 
 ---
 
