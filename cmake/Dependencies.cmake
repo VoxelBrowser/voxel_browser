@@ -308,6 +308,10 @@ if(VB_WITH_NET)
     # links it) rather than patching the fetched sources.
     if(MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$" AND TARGET GameNetworkingSockets_s)
       target_compile_definitions(GameNetworkingSockets_s PUBLIC VALVE_LITTLE_ENDIAN=1)
+      # Its bundled donna crypto also calls __emulu(), which MSVC/ARM64 declares
+      # but doesn't implement (unresolved external at link time).
+      add_library(vb_arm64_msvc_shims STATIC "${CMAKE_CURRENT_LIST_DIR}/shims/arm64_msvc_emulu.c")
+      target_link_libraries(GameNetworkingSockets_s PUBLIC vb_arm64_msvc_shims)
     endif()
   endif()
 endif()
