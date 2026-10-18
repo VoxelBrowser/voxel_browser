@@ -336,7 +336,9 @@ Follow-ups:
       from the release tags; `src/server/check_pack_data.inc` is generated). Fixed what it found:
       `CraftDef` stub keys (`inputs`/`output`), base's pack-only `drops` key reaching the engine,
       kitchen_sink's untextured ore.
-- [ ] Singleplayer should show an `engine_version_req` mismatch in the main menu (today: stderr + base set).
+- [x] Singleplayer shows an `engine_version_req` mismatch on the menu's error screen and does not start
+      (2026-10-18; it used to run the base block set and only print to stderr). The error screen now
+      wraps long reasons; automation snapshot gains `error_message`; e2e in `test_windowed.py`.
 - [x] `vb.noise.value`/`cellular` accept a number or `{ frequency = n }` (2026-10-18; other types
       raise). kitchen_sink's fbm sources are now `value(1)` (same terrain as before: the table was
       ignored, and fbm multiplies the frequency); its standalone cellular layer now really is 1/24.

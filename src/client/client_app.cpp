@@ -835,7 +835,8 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 			break;
 		}
 		case AppState::kError: {
-			const auto result = menu.draw_error(error_message);
+			const auto result = menu.draw_error(error_message,
+					connecting_singleplayer ? "Could not start singleplayer" : "Could not connect");
 			if (result.back) {
 				state = AppState::kMenu;
 			}

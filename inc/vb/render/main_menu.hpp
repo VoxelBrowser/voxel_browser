@@ -110,7 +110,7 @@ public:
 	struct ErrorResult {
 		bool back = false;
 	};
-	ErrorResult draw_error(std::string_view reason);
+	ErrorResult draw_error(std::string_view reason, std::string_view title = "Could not connect");
 
 	// --- loading screen (Phase 7.1) ---------------------------------------
 	// The window between "joined" and "first playable frame" -- initial chunk

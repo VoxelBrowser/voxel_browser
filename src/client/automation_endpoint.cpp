@@ -551,6 +551,9 @@ json ClientAutomationEndpoint::state() {
 		{ "selected_slot", app_.selected_hotbar_slot() + 1 },
 		{ "busy_actions", tasks_.size() },
 	};
+	if (app_.app_state() == AppState::kError) {
+		s["error_message"] = app_.error_text();
+	}
 #if defined(VB_WITH_AUTH)
 	if (const auto *si = app_.sign_in_state()) {
 		// What the sign-in screen / re-auth banner would show (docs/automation-protocol.md).

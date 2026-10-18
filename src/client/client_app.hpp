@@ -115,6 +115,8 @@ public:
 	// The menu is drawn by raygui from raylib's real input state, so these set the same
 	// fields a player would type into and hand kMenu the same result a click would.
 	bool menu_active() const { return state == AppState::kMenu; }
+	// What the error screen says (app_state "error").
+	const std::string &error_text() const { return error_message; }
 	// The name this connection used (what the menu holds), not config.player_name, which only
 	// follows it after a menu-driven connect.
 	const std::string &player_name() const { return menu.player_name(); }
