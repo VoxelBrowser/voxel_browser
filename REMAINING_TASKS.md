@@ -59,7 +59,7 @@ Full detail: `remaining_tasks/phase1.md`.
       confirmed 2026-09-28); two-client replication re-run over
       `GnsTransport` (2026-09-28).
 - [x] macOS CI builds `VB_WITH_NET` (2026-09-30, `build_net_deps` job in
-      `build_macos.yml`) — **not yet verified by a real Actions run**.
+      `build_macos.yml`); green on a real Actions run (2026-10-17, run 39044682584).
 
 ---
 
@@ -318,8 +318,8 @@ Follow-ups:
 Full detail: `remaining_tasks/cross_cutting.md`.
 
 - [~] **End-to-end multiplayer automation (dev-only)** — all phases E0–E6
-      landed (design `docs/e2e-automation.md`). Still open: the CI `e2e` job
-      has never run on a runner; Windows/macOS are unbuilt. Must stay
+      landed (design `docs/e2e-automation.md`). The Linux CI `e2e` job is
+      green on PRs (2026-10-17). Still open: Windows/macOS are unbuilt. Must stay
       compiled out of production builds (`VB_WITH_AUTOMATION`,
       `VB_DISTRIBUTION`). Doc-upkeep checklist: `docs/e2e-automation.md` §11.
 - [x] `PlayerHandle` stored across ticks read corrupted data — fixed
@@ -328,8 +328,8 @@ Full detail: `remaining_tasks/cross_cutting.md`.
 - [ ] Keep `ENGINE_PROTOCOL_VERSION` + `docs/protocol.md` in lockstep with every
       wire change.
 - [ ] Every new `vb/protocol` struct gets a round-trip + fuzz test.
-- [x] Sanitizer CI jobs (ASan/UBSan, TSan; Linux only, never verified by a
-      real Actions run), soak test (`soak_test.cpp`), perf budget checks
+- [x] Sanitizer CI jobs (ASan/UBSan, TSan; Linux only, green on real Actions
+      runs since 2026-10-17), soak test (`soak_test.cpp`), perf budget checks
       (`perf_budget_test.cpp`; frame time left out — needs a GL context).
 - [ ] Determinism golden-value CI gate stays green across platforms.
 - [ ] `--headless` stays functional for both binaries (CI + integration tests).
