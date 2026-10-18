@@ -220,6 +220,12 @@ void ClientApp::draw_sign_in() {
 	const std::string last_error = sign_in->last_error();
 	view.error = last_error;
 	auto ui = menu.draw_signing_in(view);
+#if defined(VB_WITH_AUTOMATION)
+	if (pending_sign_in) { // automation: the click a player would have made
+		ui = std::move(*pending_sign_in);
+		pending_sign_in.reset();
+	}
+#endif
 	if (ui.cancel) {
 		sign_in->cancel();
 		sp.reset(); // before sign_in: its session holds a ticket pointing at it
@@ -240,6 +246,28 @@ void ClientApp::draw_sign_in() {
 		std::fill(ui.password.begin(), ui.password.end(), '\0');
 	}
 }
+#if defined(VB_WITH_AUTOMATION)
+bool ClientApp::sign_in_choose(std::string_view choice) {
+	using Phase = vb::auth::SignInCoordinator::Phase;
+	if (!render || !sign_in || sign_in->reauth_prompt_active() || sign_in->phase() == Phase::kFinished) {
+		return false; // no sign-in screen (headless signs in by itself; the re-auth banner is separate)
+	}
+	vb::render::MainMenu::SigningInResult r;
+	const bool choosing = sign_in->phase() == Phase::kChoosing && !sign_in->needs_trust();
+	if (choice == "trust" && sign_in->needs_trust()) {
+		r.trust = true;
+	} else if (choice == "browser" && choosing && (sign_in->supports_browser() || sign_in->supports_google())) {
+		r.browser = true;
+	} else if (choice == "cancel") {
+		r.cancel = true;
+	} else {
+		return false;
+	}
+	pending_sign_in = std::move(r);
+	return true;
+}
+#endif
+
 // Periodic re-auth (auth.md §5.6): the silent refresh happens without any UI;
 // only when it fails does this non-blocking banner appear over the running
 // game. The player can ignore it, but the server kicks once its grace runs out.
@@ -526,6 +554,12 @@ void ClientApp::enter_playing() {
 	// No renderer means nothing to wait on: go straight to playing.
 	state = render ? AppState::kLoading : AppState::kPlaying;
 }
+
+#if defined(VB_WITH_AUTOMATION) && !defined(VB_WITH_AUTH)
+bool ClientApp::sign_in_choose(std::string_view) {
+	return false; // no sign-in screen without VB_WITH_AUTH
+}
+#endif
 
 const char *ClientApp::app_state_name(AppState s) {
 	switch (s) {

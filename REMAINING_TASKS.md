@@ -274,7 +274,11 @@ Full detail: `remaining_tasks/phase9.md`.
       subject }` in every screen/HUD `state`; `S2C_JoinAccept.your_name`
       (protocol 33) so the client knows its server-given name (also used for
       `client.player_name()`); base `pause.lua` shows "Signed in as …".
-- [ ] Still open from 9.x: first-use trust prompt at e2e level;
+- [x] First-use trust prompt at e2e level (2026-10-18): `signin.trust|browser|cancel`
+      automation commands click the windowed sign-in screen's buttons;
+      `test_first_use_trust_prompt_asks_before_contacting_the_idp` checks nothing
+      reaches the IdP before Continue and that a second client is not asked again.
+- [ ] Still open from 9.x:
       manual sign-in runs and builds on Windows/macOS (socket/ShellExecute
       code is unbuilt).
 

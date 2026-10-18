@@ -429,7 +429,7 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 	const float panel_y = std::max(20.0f,
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
 	const std::string title = view.title.empty() ? std::string("Sign in")
-												 : "Sign in — " + std::string(view.title);
+												 : "Sign in - " + std::string(view.title); // ASCII: raylib's default font has no em dash
 	GuiPanel(centered(panel_w, panel_h, panel_y), title.c_str());
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
 	const float w = panel_w - 40.0f;

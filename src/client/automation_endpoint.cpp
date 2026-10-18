@@ -810,6 +810,13 @@ std::optional<Reply> ClientAutomationEndpoint::command(const Request &req) {
 		}
 		return Reply::success(); // the transition shows up in app_state over the next frames
 	}
+	if (req.cmd == "signin.trust" || req.cmd == "signin.browser" || req.cmd == "signin.cancel") {
+		const std::string choice = req.cmd.substr(std::string_view("signin.").size());
+		if (!app_.sign_in_choose(choice)) {
+			return Reply::error("unavailable", "that button is not on the sign-in screen (see the snapshot's 'auth')");
+		}
+		return Reply::success(); // acted on by the next frame, like a click
+	}
 	if (req.cmd == "screenshot") {
 		if (!a.contains("path") || !a["path"].is_string() || a["path"].get<std::string>().empty()) {
 			return bad("screenshot: needs string 'path'");

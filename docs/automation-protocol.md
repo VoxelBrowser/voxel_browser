@@ -61,6 +61,7 @@ second), so they behave the same under `--automation-clock manual`.
 | `proto_mismatch` | `hello.proto` ≠ host's protocol version |
 | `unsupported` | e.g. `step` without `--automation-clock manual`; `screenshot` on a headless client |
 | `not_in_menu` | `menu.*` while the client isn't on the main menu (extra `app_state`) |
+| `unavailable` | `signin.*`: that button is not on the sign-in screen (no sign-in in progress, the trust prompt is not up, or no browser method) |
 | `timeout` | `wait_for` or a client action ran out of time; `error.last` holds what was observed |
 | `not_playing` | client action needs `app_state` = `playing` (and a joined session) |
 | `out_of_reach` | `break_block`/`place_block` target is farther than the reach (5.0); extra `distance`, `reach` |
@@ -136,6 +137,7 @@ commands inject the *result* of a click and fill the fields a player would type 
 | `menu.set_name` | `{name}` → `{}` |
 | `menu.connect` | `{host, port, name?}` → `{}`; the transition shows up in `app_state` (`connecting` → `loading` → `playing`; the loading screen needs frames to mesh the first chunks) |
 | `menu.singleplayer` | `{name?}` → `{}` |
+| `signin.trust` / `signin.browser` / `signin.cancel` | `{}` → `{}`; the engine-drawn sign-in screen's *Continue* (first-use trust prompt), *Sign in with your browser* (or *with Google*) and *Cancel*, acted on by the next frame like the click. `unavailable` when that button is not on screen (read `auth` first). Builds with `VB_WITH_AUTH`; a headless client answers the trust prompt and starts the browser flow by itself |
 | `screenshot` | `{path}` → `{path, width, height}`; saves the framebuffer as a PNG at the end of the next frame (works on the menu and in game). `unsupported` on a headless client |
 | `type` | `{text}` → `{}`; appends to the chat box as keyboard characters would, opening it first; `key.press enter` then sends it. Works headless too (the box's buffer and Enter handling are shared; only raygui's drawing of it is windowed) |
 

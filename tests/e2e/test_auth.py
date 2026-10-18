@@ -146,6 +146,49 @@ def test_browser_flow_with_pkce_over_a_loopback_redirect(idp, auth_server, make_
 
 
 @pytest.mark.slow
+def test_first_use_trust_prompt_asks_before_contacting_the_idp(idp, auth_server, make_clients, tmp_path,
+                                                               monkeypatch):
+    """A windowed client (real sign-in screen) meets this server + IdP pair for the first time: it must
+    ask before anything is sent to the IdP. After Continue and a browser sign-in, a second client with the
+    same config dir is not asked again and signs in silently with the saved refresh token."""
+    if not __import__("os").environ.get("DISPLAY"):
+        pytest.skip("needs a display (xvfb-run)")
+    idp.next_user = {"subject": "sub-erin", "name": "erin"}
+    server = auth_server()
+    url_file = tmp_path / "auth_url.txt"
+    monkeypatch.setenv("VB_AUTH_URL_FILE", str(url_file))
+    factory = make_clients(server)
+
+    (first,) = factory(1, via_menu=True, home="erin")
+    first.menu_connect("127.0.0.1", server.port, name="erin")
+    expect(first).to_have_auth(phase="choosing", needs_trust=True, timeout=20.0)
+    first.screenshot(tmp_path / "trust_prompt.png")
+    time.sleep(0.5)  # give a wrong client every chance to jump ahead
+    assert not url_file.exists(), "the browser flow started before the player trusted the server"
+    asked = idp.requests("auth") + idp.requests("token")
+    assert asked == [], "the client contacted the IdP before the player agreed: %r" % asked
+    with pytest.raises(Exception):
+        first.signin("browser")  # not offered while the trust prompt is up
+
+    first.signin("trust")
+    expect(first).to_have_auth(phase="choosing", needs_trust=False)
+    first.signin("browser")
+    deadline = time.time() + 20
+    while not (url_file.exists() and url_file.read_text()) and time.time() < deadline:
+        time.sleep(0.05)
+    with urllib.request.urlopen(url_file.read_text(), timeout=10) as r:  # play the browser
+        assert r.status == 200
+    expect(server).to_have_player_login("sub-erin", name="erin", timeout=20.0)
+    first.close()
+
+    url_file.unlink()
+    (again,) = factory(1, via_menu=True, home="erin")
+    again.menu_connect("127.0.0.1", server.port, name="erin")
+    expect(again).to_be_joined()
+    assert not url_file.exists(), "a trusted pair with a saved login opened the browser again"
+    assert "refresh_token" in idp.grants()
+
+
 def test_revoked_login_is_kicked_after_the_grace_period(idp, auth_server, make_clients, tmp_path):
     """Periodic live re-auth (auth.md §5.6): the client re-reads its token file for every
     re-auth, so withholding it models an IdP that no longer issues tokens (a revoked session)."""
