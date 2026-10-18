@@ -6,7 +6,7 @@
 
 `vb.config.get(key) -> any`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Read-only operator setting from `server.toml`/CLI, or `nil` (unknown key, or singleplayer). Keys: bind_address, port, content_pack, max_players, view_distance, tick_rate, world_seed, gravity, void_kill_y, day_length_seconds, asset_max_file_mb, asset_max_total_mb, max_connections_per_ip, max_messages_per_second, auth_mode, motd.
 

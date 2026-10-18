@@ -119,8 +119,8 @@ integer Numeric block id. A held item and a placeable block share one id space.
 | Field | Type | Description |
 | --- | --- | --- |
 | `name?` | `string` | Recipe name. |
-| `ingredients?` | `ItemStack[]` |  |
-| `result?` | `ItemStack` |  |
+| `inputs?` | `ItemStack[]` | What the recipe consumes. |
+| `output?` | `ItemStack` | What it makes. |
 
 ## DayNightKeyframe
 

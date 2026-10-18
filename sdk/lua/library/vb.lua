@@ -49,6 +49,7 @@ function vb.register_block(def) end
 ---@field name string Item name.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Registers an item (captured; items share the block id space).
 ---```lua
 ---vb.register_item{ name = "mypack:ruby_shard" }
@@ -101,6 +102,7 @@ function vb.register_item(def) end
 ---@field on_death? fun(self: Entity, cause: string|nil)
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Registers an entity kind and returns its id.
 ---```lua
 ---vb.register_entity{ name = "mypack:slime", health = 10, on_tick = function(self, dt) end }
@@ -119,6 +121,7 @@ function vb.register_entity(def) end
 ---@field decoration? table[] List of `{structure=, spawn_rate=, ...placement}` or `{spawn_rate=, blocks={{x,y,z,block}}}`.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Registers a biome (only used once `vb.worldgen.set_pipeline` is called).
 ---```lua
 ---vb.register_biome{ name = "mypack:desert", surface = "base:sand", filler = "base:sand", stone = "base:stone" }
@@ -150,6 +153,7 @@ function vb.register_biome(def) end
 ---@field placement? StructurePlacement Defaults for decoration rules.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Registers a decorative structure for biome decoration.
 ---```lua
 ---vb.register_structure(require("structures.oak_tree"))
@@ -159,18 +163,20 @@ function vb.register_structure(def) end
 
 ---@class CraftDef
 ---@field name? string Recipe name.
----@field ingredients? ItemStack[]
----@field result? ItemStack
+---@field inputs? ItemStack[] What the recipe consumes.
+---@field output? ItemStack What it makes.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Captures a crafting recipe (the engine does not read it back; `content/base/crafting.lua` is an example consumer).
 ---```lua
----vb.register_craft{ ingredients = { { item = 1, count = 1 } }, result = { item = 2, count = 4 } }
+---vb.register_craft{ name = "mypack:planks", inputs = { { item = 1, count = 1 } }, output = { item = 2, count = 4 } }
 ---```
 ---@param def CraftDef
 function vb.register_craft(def) end
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Declares a custom input slot and returns its bit index (max 32).
 ---Idempotent by name. The engine names (`jump`, `sprint`, ...) are pre-registered.
 ---```lua
@@ -184,6 +190,7 @@ function vb.register_craft(def) end
 function vb.register_keybind(name) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Subscribes `handler` to an engine event. Handler arguments depend on the event; see `events.lua`.
 ---```lua
 ---vb.on("chat", function(player, text) if text == "boo" then return false end end)
@@ -210,6 +217,7 @@ function vb.register_keybind(name) end
 function vb.on(event, handler) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Runs `fn` once after `seconds`.
 ---```lua
 ---vb.after(5, function() print("five seconds later") end)
@@ -219,6 +227,7 @@ function vb.on(event, handler) end
 function vb.after(seconds, fn) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Runs `fn` every `seconds` (catches up on a stalled tick, capped at 8 fires per dispatch).
 ---```lua
 ---vb.every(60, function() print("a minute passed") end)
@@ -228,6 +237,7 @@ function vb.after(seconds, fn) end
 function vb.every(seconds, fn) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---@vb member
 ---Server pack VM only. Persistent pack-global key/value store, saved to `<pack>/storage.json`.
 ---Assigning `nil` is allowed; values are JSON-compatible (numbers, strings, booleans, tables).

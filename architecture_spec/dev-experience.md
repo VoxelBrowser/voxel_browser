@@ -488,6 +488,13 @@ Deviations and decisions made while implementing, in the order a reader will hit
   templates; any warning fails the `luals` lint job (packs gate too, not just `sdk/`). Its first run found
   stub signatures that disagreed with the engine (block `on_break`/`on_place` ctx, entity `on_hit`
   arguments, missing `PlayerInput.dt`) -- the drift test only compares names.
+- **`--check-pack` warnings** (since 2026-10-18): the server-side load runs with `vb.register_*` and
+  `vb.worldgen.set_pipeline` wrapped, recording each definition table's keys, block textures and the
+  calling `file:line` (`debug.traceback`; read back with `PackRuntime::eval_string`). Keys are compared
+  with the stub `---@class` fields and `since` versions with `engine_version_req`'s lower bound, both
+  from `src/server/check_pack_data.inc`, which `gen_lua_docs.py` generates (and `--check` verifies). The
+  `since` check scans code (comments and strings skipped) for `vb.`/`ui.`/`client.` field chains;
+  `Player:`/`Entity:` methods are not covered (the receiver type is not known statically).
 - **Nested `ui/.luarc.json`** (since 2026-10-18): lists only `ui.lua` + `sandbox.lua`, so with `ui/` added
   as its own workspace folder (multi-root) LuaLS flags `vb` there; `vb pack init/types` write it when the
   pack has a `ui/` folder, and CI checks each pack's `ui/` with it. No generated `.code-workspace`: the

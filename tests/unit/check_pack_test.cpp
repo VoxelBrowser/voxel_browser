@@ -68,7 +68,8 @@ TEST_CASE("scan_globals lists reads and writes with lines, including nested func
 TEST_CASE("check_pack: a clean pack passes") {
 	TempPack p("clean");
 	p.write("init.lua", "vb.on('chat', function(player, text) end)\n");
-	p.write("blocks/a.lua", "vb.register_block{ name = 'mypack:a' }\n");
+	p.write("blocks/a.lua", "vb.register_block{ name = 'mypack:a', texture = 'textures/a.png' }\n");
+	p.write("textures/a.png", "png");
 	p.write("ui/hud.lua", "ui.define_hud(function(state) return { widgets = {} } end)\n");
 	const CheckReport r = vb::server::check_pack(p.dir);
 	INFO(vb::server::format_human(r, false));
@@ -210,6 +211,77 @@ TEST_CASE("check_pack: --json output has the documented shape") {
 	CHECK(j["diagnostics"][0]["file"] == "init.lua");
 	CHECK(j["diagnostics"][0]["line"] == 2);
 	CHECK(j["diagnostics"][0]["message"].get<std::string>().find("x") != std::string::npos);
+}
+
+TEST_CASE("check_pack: unknown keys in definition tables warn at the registering line") {
+	TempPack p("keys");
+	p.write("textures/a.png", "png");
+	p.write("blocks/a.lua",
+			"-- a block\n"
+			"vb.register_block{ name = 'mypack:a', texture = 'textures/a.png', max_damge = 3 }\n");
+	p.write("init.lua", "\nvb.register_entity{ name = 'mypack:e', helth = 5, on_tick = function(self, dt) end }\n");
+	const CheckReport r = vb::server::check_pack(p.dir);
+	INFO(vb::server::format_human(r, false));
+	CHECK(r.errors() == 0);
+	const auto *block = find(r, "blocks/a.lua", 2);
+	REQUIRE(block != nullptr);
+	CHECK(block->severity == PackDiagnostic::Severity::kWarning);
+	CHECK(block->message.find("unknown key 'max_damge'") != std::string::npos);
+	CHECK(block->message.find("BlockDef") != std::string::npos);
+	const auto *entity = find(r, "init.lua", 2);
+	REQUIRE(entity != nullptr);
+	CHECK(entity->message.find("unknown key 'helth'") != std::string::npos);
+	CHECK(r.warnings() == 2); // the valid keys (on_tick, texture, ...) are not reported
+}
+
+TEST_CASE("check_pack: a block without a texture, or with one the pack lacks, warns") {
+	TempPack p("textures");
+	p.write("blocks/a.lua",
+			"vb.register_block{ name = 'mypack:plain' }\n"
+			"vb.register_block{ name = 'mypack:lost', texture = 'textures/nope.png', crack_texture = 'cracks.png' }\n");
+	const CheckReport r = vb::server::check_pack(p.dir);
+	INFO(vb::server::format_human(r, false));
+	CHECK(r.errors() == 0);
+	REQUIRE(r.warnings() == 3);
+	const auto *plain = find(r, "blocks/a.lua", 1);
+	REQUIRE(plain != nullptr);
+	CHECK(plain->message.find("'mypack:plain' has no texture") != std::string::npos);
+	int lost = 0;
+	for (const auto &d : r.diagnostics) {
+		if (d.line == 2 && (d.message.find("texture 'textures/nope.png' is not in the pack") != std::string::npos ||
+								   d.message.find("crack_texture 'cracks.png' is not in the pack") != std::string::npos)) {
+			++lost;
+		}
+	}
+	CHECK(lost == 2);
+}
+
+TEST_CASE("check_pack: using an API newer than engine_version_req's lower bound warns") {
+	TempPack p("since");
+	p.write("pack.toml", "name = \"t\"\nengine_version_req = \">=0.1.0\"\n");
+	p.write("init.lua",
+			"-- vb.render.set_third_person(false) in a comment does not count\n"
+			"local s = 'vb.render.set_third_person'\n"
+			"vb.render.set_third_person(false)\n"
+			"vb.render.set_third_person(true) -- reported once per file\n");
+	p.write("ui/hud.lua", "ui.define_hud(function(state)\n  client.capture_mouse(true)\n  return { widgets = {} }\nend)\n");
+	CheckOptions options;
+	options.engine = { 9, 0, 0 };
+	CheckReport r = vb::server::check_pack(p.dir, options);
+	INFO(vb::server::format_human(r, false));
+	CHECK(r.errors() == 0);
+	CHECK(r.warnings() == 2);
+	const auto *server = find(r, "init.lua", 3);
+	REQUIRE(server != nullptr);
+	CHECK(server->message.find("vb.render.set_third_person is new in 0.1.7") != std::string::npos);
+	CHECK(server->message.find(">=0.1.7") != std::string::npos);
+	CHECK(find(r, "ui/hud.lua", 2) != nullptr); // client.capture_mouse, since 0.1.5
+
+	// A requirement that already admits only new enough engines, or none at all: quiet.
+	p.write("pack.toml", "name = \"t\"\nengine_version_req = \">=0.1.7\"\n");
+	CHECK(vb::server::check_pack(p.dir, options).warnings() == 0);
+	p.write("pack.toml", "name = \"t\"\nengine_version_req = \"*\"\n");
+	CHECK(vb::server::check_pack(p.dir, options).warnings() == 0);
 }
 
 TEST_CASE("check_pack: the bundled packs are clean") {

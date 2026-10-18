@@ -6,7 +6,7 @@
 
 `vb.physics.set_params(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Overrides player movement tunables (only the given fields; replaces any earlier call). Sent to clients so prediction matches the server.
 
@@ -22,7 +22,7 @@ vb.physics.set_params{ gravity = 20, jump_speed = 9 }
 
 `vb.physics.get_params() -> PhysicsParams`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Effective movement tunables (defaults plus pack overrides).
 

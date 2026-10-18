@@ -6,7 +6,7 @@
 
 `vb.world.get_block(x, y, z) -> BlockId`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Block id at a voxel.
 
@@ -26,7 +26,7 @@ if vb.world.get_block(0, 64, 0) == 0 then print("air") end
 
 `vb.world.set_block(x, y, z, id)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Sets a block and replicates it. Known gap: does not run the relight cascade.
 
@@ -45,7 +45,7 @@ vb.world.set_block(0, 64, 0, 1)
 
 `vb.world.raycast(origin, dir, max) -> RayHit|nil`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Casts a ray through the voxel world; `nil` when nothing is hit within `max`.
 
@@ -66,7 +66,7 @@ if hit then print(hit.x, hit.y, hit.z) end
 
 `vb.world.spawn_item_drop(pos, item, count)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Spawns a dropped item that nearby players auto-collect.
 
@@ -84,7 +84,7 @@ vb.world.spawn_item_drop({x=0,y=65,z=0}, 3, 1)
 
 `vb.world.spawn(kind, pos, opts) -> Entity`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Spawns an entity of a registered kind and returns its `self` table.
 

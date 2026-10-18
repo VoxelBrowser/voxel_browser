@@ -330,8 +330,12 @@ Follow-ups:
       by `vb pack init/types`. Fixing it to zero corrected wrong stubs: block `on_break`/`on_place`
       take a `ctx {pos, player}`, entity `on_hit(self, amount, cause)`, `PlayerInput.dt`,
       `fall_gravity_scale`, open `Entity` fields, the sandboxed `require`.
-- [ ] `--check-pack` warnings: block without a texture, unknown keys in `def` tables; `since`-aware
-      "API newer than your `engine_version_req`" warning (§3.7 "Later").
+- [x] `--check-pack` warnings (2026-10-18): unknown keys in `vb.register_*`/`set_pipeline` tables
+      (from the stubs' `---@class` fields), blocks without a texture or with one the pack lacks, and
+      APIs newer than `engine_version_req`'s lower bound (every stub now has `---@vb since`, derived
+      from the release tags; `src/server/check_pack_data.inc` is generated). Fixed what it found:
+      `CraftDef` stub keys (`inputs`/`output`), base's pack-only `drops` key reaching the engine,
+      kitchen_sink's untextured ore.
 - [ ] Singleplayer should show an `engine_version_req` mismatch in the main menu (today: stderr + base set).
 - [x] `vb.noise.value`/`cellular` accept a number or `{ frequency = n }` (2026-10-18; other types
       raise). kitchen_sink's fbm sources are now `value(1)` (same terrain as before: the table was

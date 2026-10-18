@@ -23,6 +23,7 @@ vb.physics = {}
 ---@field fall_gravity_scale? number Read-only (`get_params`): gravity multiplier while falling.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Overrides player movement tunables (only the given fields; replaces any earlier call).
 ---Sent to clients so prediction matches the server.
 ---```lua
@@ -32,6 +33,7 @@ vb.physics = {}
 function vb.physics.set_params(def) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Effective movement tunables (defaults plus pack overrides).
 ---```lua
 ---print(vb.physics.get_params().gravity)
@@ -54,6 +56,7 @@ vb.combat = {}
 ---@field swing_clip_seconds? number How long the swing clip stays set. Default 0.3.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Overrides punch/combat tunables.
 ---```lua
 ---vb.combat.set_params{ player_damage = 2, punch_cooldown_seconds = 0.4 }
@@ -68,6 +71,7 @@ vb.action = {}
 ---@field reach? number Maximum block interaction distance in blocks.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Overrides action tunables (block reach).
 ---```lua
 ---vb.action.set_params{ reach = 6 }
@@ -76,6 +80,7 @@ vb.action = {}
 function vb.action.set_params(def) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Effective action tunables.
 ---```lua
 ---print(vb.action.get_params().reach)
@@ -91,6 +96,7 @@ vb.hunger = {}
 ---@field starvation_damage_per_second? number
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Overrides hunger tunables.
 ---```lua
 ---vb.hunger.set_params{ decay_per_second = 0.02 }
@@ -99,6 +105,7 @@ vb.hunger = {}
 function vb.hunger.set_params(def) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Effective hunger tunables.
 ---```lua
 ---print(vb.hunger.get_params().decay_per_second)
@@ -115,6 +122,7 @@ vb.daynight = {}
 ---@field color {r: integer, g: integer, b: integer} Sky colour.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Replaces the sky gradient. `keyframes` must be non-empty.
 ---```lua
 ---vb.daynight.set_curve{ keyframes = {
@@ -126,6 +134,7 @@ vb.daynight = {}
 function vb.daynight.set_curve(def) end
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Real seconds one in-game day takes (> 0).
 ---```lua
 ---vb.daynight.set_day_length(600)
@@ -142,6 +151,7 @@ vb.render = {}
 ---@field underwater_tint? {r: integer, g: integer, b: integer} Optional 0-255 tint when submerged.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Overrides the distance fog sent to clients.
 ---```lua
 ---vb.render.set_fog{ start = 40, ["end"] = 120 }
@@ -150,6 +160,7 @@ vb.render = {}
 function vb.render.set_fog(def) end
 
 ---@vb context load
+---@vb since 0.1.7
 ---Server pack VM only. Allows (default) or forbids the client's third-person camera (F5), which lets a player see
 ---their own appearance (`player:set_visual_override`).
 ---```lua
@@ -162,6 +173,7 @@ function vb.render.set_third_person(allowed) end
 vb.config = {}
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Read-only operator setting from `server.toml`/CLI, or `nil` (unknown key, or singleplayer).
 ---Keys: bind_address, port, content_pack, max_players, view_distance, tick_rate, world_seed, gravity,
 ---void_kill_y, day_length_seconds, asset_max_file_mb, asset_max_total_mb, max_connections_per_ip,

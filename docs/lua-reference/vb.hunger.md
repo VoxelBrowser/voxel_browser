@@ -6,7 +6,7 @@
 
 `vb.hunger.set_params(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Overrides hunger tunables.
 
@@ -22,7 +22,7 @@ vb.hunger.set_params{ decay_per_second = 0.02 }
 
 `vb.hunger.get_params() -> HungerParams`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Effective hunger tunables.
 

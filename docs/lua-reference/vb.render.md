@@ -6,7 +6,7 @@
 
 `vb.render.set_fog(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Overrides the distance fog sent to clients.
 
@@ -22,7 +22,7 @@ vb.render.set_fog{ start = 40, ["end"] = 120 }
 
 `vb.render.set_third_person(allowed)`
 
-context: **load**
+context: **load** · since: **0.1.7**
 
 Server pack VM only. Allows (default) or forbids the client's third-person camera (F5), which lets a player see their own appearance (`player:set_visual_override`).
 

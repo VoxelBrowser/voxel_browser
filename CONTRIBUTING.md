@@ -204,11 +204,15 @@ you're adding a new `vb.*`/`ui.*` binding:
   more general primitive plus content-side logic gets you the same result.
 - **Add the stub in the same commit** (`sdk/lua/library/*.lua`, LuaCATS): a
   one-line summary, `---@param`/`---@return` for every argument, a
-  ```` ```lua ```` example, and `---@vb context load|runtime|ui` (usertype
+  ```` ```lua ```` example, `---@vb since <x.y.z>` (the first release that
+  ships it; `--check-pack` warns packs whose `engine_version_req` admits an
+  older engine) and `---@vb context load|runtime|ui` (usertype
   methods as `function Player:name(...) end`, definition tables as
   `---@class` with one `---@field` per key). Then run
   `python3 scripts/gen_lua_docs.py` and commit the regenerated
-  `docs/lua-reference/` and `sdk/lua/api_index.txt`. Two checks keep this
+  `docs/lua-reference/`, `sdk/lua/api_index.txt` and
+  `src/server/check_pack_data.inc` (the `since` versions and every
+  `---@class`'s keys, which `--check-pack` uses). Two checks keep this
   honest: `lua_api_surface_test` (live `vb`/`ui`/`client` tables and usertype
   methods must equal `api_index.txt`; doc examples must compile) and the
   `lua-docs` lint job (`gen_lua_docs.py --check`). A binding that is

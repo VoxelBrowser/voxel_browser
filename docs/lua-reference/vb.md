@@ -24,7 +24,7 @@ local ruby = vb.register_block{ name = "mypack:ruby", texture = "textures/ruby.p
 
 `vb.register_item(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Registers an item (captured; items share the block id space).
 
@@ -40,7 +40,7 @@ vb.register_item{ name = "mypack:ruby_shard" }
 
 `vb.register_entity(def) -> EntityKindId`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Registers an entity kind and returns its id.
 
@@ -58,7 +58,7 @@ vb.register_entity{ name = "mypack:slime", health = 10, on_tick = function(self,
 
 `vb.register_biome(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Registers a biome (only used once `vb.worldgen.set_pipeline` is called).
 
@@ -74,7 +74,7 @@ vb.register_biome{ name = "mypack:desert", surface = "base:sand", filler = "base
 
 `vb.register_structure(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Registers a decorative structure for biome decoration.
 
@@ -90,7 +90,7 @@ vb.register_structure(require("structures.oak_tree"))
 
 `vb.register_craft(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Captures a crafting recipe (the engine does not read it back; `content/base/crafting.lua` is an example consumer).
 
@@ -99,14 +99,14 @@ Server pack VM only. Captures a crafting recipe (the engine does not read it bac
 | `def` | `CraftDef` |  |
 
 ```lua
-vb.register_craft{ ingredients = { { item = 1, count = 1 } }, result = { item = 2, count = 4 } }
+vb.register_craft{ name = "mypack:planks", inputs = { { item = 1, count = 1 } }, output = { item = 2, count = 4 } }
 ```
 
 ## vb.register_keybind
 
 `vb.register_keybind(name) -> integer`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Declares a custom input slot and returns its bit index (max 32). Idempotent by name. The engine names (`jump`, `sprint`, ...) are pre-registered.
 
@@ -127,7 +127,7 @@ end)
 
 `vb.on(event, handler)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Subscribes `handler` to an engine event. Handler arguments depend on the event; see `events.lua`.
 
@@ -144,7 +144,7 @@ vb.on("chat", function(player, text) if text == "boo" then return false end end)
 
 `vb.after(seconds, fn)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Runs `fn` once after `seconds`.
 
@@ -161,7 +161,7 @@ vb.after(5, function() print("five seconds later") end)
 
 `vb.every(seconds, fn)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Runs `fn` every `seconds` (catches up on a stalled tick, capped at 8 fires per dispatch).
 
@@ -178,7 +178,7 @@ vb.every(60, function() print("a minute passed") end)
 
 `vb.storage`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Persistent pack-global key/value store, saved to `<pack>/storage.json`. Assigning `nil` is allowed; values are JSON-compatible (numbers, strings, booleans, tables).
 

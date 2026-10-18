@@ -1,6 +1,7 @@
 #include "check_pack.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 #include <map>
@@ -61,6 +62,56 @@ const std::set<std::string> kSandboxRemoved = { "os", "io", "package", "dofile",
 	"collectgarbage" };
 
 const std::set<std::string> kServerGlobals = { "vb" };
+
+struct ApiSince {
+	const char *member;
+	const char *since;
+};
+struct ClassKeys {
+	const char *name;
+	const char *keys; // space-separated
+};
+#include "check_pack_data.inc"
+
+// Wraps the registration functions while the pack loads so the definition tables they receive can
+// be checked afterwards: the keys (against the stub's ---@class), block textures, and where the call
+// came from. __vb_check_dump() returns one record per call: fields separated by \31, records by \30.
+constexpr const char *kRecordRegistrations = R"lua(
+local regs = {}
+local function wrap(tbl, fname, class, label)
+	local orig = tbl and tbl[fname]
+	if type(orig) ~= "function" then
+		return
+	end
+	tbl[fname] = function(def, ...)
+		if type(def) == "table" then
+			local keys = {}
+			for k in pairs(def) do
+				if type(k) == "string" then
+					keys[#keys + 1] = k
+				end
+			end
+			table.sort(keys)
+			local function str(v)
+				return type(v) == "string" and v or ""
+			end
+			regs[#regs + 1] = table.concat({ label, class, str(def.name), table.concat(keys, ","),
+				str(def.texture), str(def.crack_texture), debug.traceback("", 2) }, "\31")
+		end
+		return orig(def, ...)
+	end
+end
+wrap(vb, "register_block", "BlockDef", "vb.register_block")
+wrap(vb, "register_item", "ItemDef", "vb.register_item")
+wrap(vb, "register_entity", "EntityDef", "vb.register_entity")
+wrap(vb, "register_biome", "BiomeDef", "vb.register_biome")
+wrap(vb, "register_structure", "StructureDef", "vb.register_structure")
+wrap(vb, "register_craft", "CraftDef", "vb.register_craft")
+wrap(vb.worldgen, "set_pipeline", "PipelineDef", "vb.worldgen.set_pipeline")
+function __vb_check_dump()
+	return table.concat(regs, "\30")
+end
+)lua";
 const std::set<std::string> kUiGlobals = { "ui", "client" };
 
 const char *env_name(LuaEnv e) {
@@ -138,6 +189,193 @@ void add_lua_error(CheckReport &r, const std::set<std::string> &known_files, con
 		}
 	}
 	add(r, Severity::kError, fallback_file, 0, first);
+}
+
+std::vector<std::string> split(const std::string &s, char sep) {
+	std::vector<std::string> out;
+	std::size_t start = 0;
+	for (;;) {
+		const std::size_t at = s.find(sep, start);
+		out.push_back(s.substr(start, at == std::string::npos ? std::string::npos : at - start));
+		if (at == std::string::npos) {
+			return out;
+		}
+		start = at + 1;
+	}
+}
+
+// The first pack-file frame of a Lua traceback, as (file, line); ("", 0) if none.
+std::pair<std::string, int> first_pack_frame(const std::string &traceback, const std::set<std::string> &known_files) {
+	static const std::regex frame(R"x(\n\s+(?:\[string "([^"]+)"\]|([^:\s]+\.lua)):(\d+):)x");
+	for (auto it = std::sregex_iterator(traceback.begin(), traceback.end(), frame); it != std::sregex_iterator(); ++it) {
+		const std::string file = (*it)[1].matched ? (*it)[1].str() : (*it)[2].str();
+		if (known_files.count(file) != 0) {
+			return { file, std::stoi((*it)[3].str()) };
+		}
+	}
+	return { "", 0 };
+}
+
+// What the registration wrapper saw: unknown definition keys (typos the engine silently ignores)
+// and block textures that are absent or missing from the pack.
+void report_registrations(CheckReport &r, const fs::path &dir, const std::string &dump,
+		const std::set<std::string> &known_files) {
+	std::map<std::string, std::set<std::string>> class_keys;
+	for (const ClassKeys &c : kClassKeys) {
+		std::istringstream in(c.keys);
+		for (std::string k; in >> k;) {
+			class_keys[c.name].insert(k);
+		}
+	}
+	std::error_code ec;
+	for (const std::string &record : split(dump, '\x1e')) {
+		const std::vector<std::string> f = split(record, '\x1f');
+		if (f.size() < 7) {
+			continue;
+		}
+		const std::string &fn = f[0], &cls = f[1], &name = f[2], &texture = f[4], &crack = f[5];
+		const auto [file, line] = first_pack_frame(f[6], known_files);
+		const std::string what = name.empty() ? fn : fn + " '" + name + "'";
+		if (const auto it = class_keys.find(cls); it != class_keys.end() && !f[3].empty()) {
+			for (const std::string &key : split(f[3], ',')) {
+				if (it->second.count(key) == 0) {
+					add(r, Severity::kWarning, file, line, what + ": unknown key '" + key + "' (not a " + cls + " field, so the engine ignores it; a typo?)");
+				}
+			}
+		}
+		if (fn != "vb.register_block") {
+			continue;
+		}
+		if (texture.empty()) {
+			add(r, Severity::kWarning, file, line, what + " has no texture: it is drawn as a flat placeholder colour");
+		} else if (!fs::is_regular_file(dir / texture, ec)) {
+			add(r, Severity::kWarning, file, line, what + ": texture '" + texture + "' is not in the pack");
+		}
+		if (!crack.empty() && !fs::is_regular_file(dir / crack, ec)) {
+			add(r, Severity::kWarning, file, line, what + ": crack_texture '" + crack + "' is not in the pack");
+		}
+	}
+}
+
+// API members a file uses (`vb.world.raycast`, `ui.define`, ...) with the line they first appear on.
+// A small Lua scanner: comments and strings are skipped, so only real code counts.
+std::vector<std::pair<std::string, int>> api_chains(const std::string &src) {
+	std::vector<std::pair<std::string, int>> out;
+	const auto is_id0 = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '_'; };
+	const auto is_id = [&](char c) { return is_id0(c) || std::isdigit(static_cast<unsigned char>(c)) != 0; };
+	// Length of the `[[` / `[==[` opener at i (its `=` count + 2), or 0.
+	const auto long_open = [&](std::size_t i) -> std::size_t {
+		if (i >= src.size() || src[i] != '[') {
+			return 0;
+		}
+		std::size_t j = i + 1;
+		while (j < src.size() && src[j] == '=') {
+			++j;
+		}
+		return j < src.size() && src[j] == '[' ? j - i + 1 : 0;
+	};
+	int line = 1;
+	const auto skip_long = [&](std::size_t &i, std::size_t open) {
+		const std::string close = "]" + std::string(open - 2, '=') + "]";
+		const std::size_t end = src.find(close, i + open);
+		const std::size_t stop = end == std::string::npos ? src.size() : end + close.size();
+		line += static_cast<int>(std::count(src.begin() + static_cast<std::ptrdiff_t>(i), src.begin() + static_cast<std::ptrdiff_t>(stop), '\n'));
+		i = stop;
+	};
+	std::size_t i = 0;
+	char prev = 0; // last significant character, to skip `x.vb` and `obj:vb`
+	while (i < src.size()) {
+		const char c = src[i];
+		if (c == '\n') {
+			++line;
+			++i;
+			continue;
+		}
+		if (c == '-' && i + 1 < src.size() && src[i + 1] == '-') {
+			if (const std::size_t open = long_open(i + 2)) {
+				i += 2;
+				skip_long(i, open);
+			} else {
+				while (i < src.size() && src[i] != '\n') {
+					++i;
+				}
+			}
+			continue;
+		}
+		if (const std::size_t open = long_open(i)) {
+			skip_long(i, open);
+			prev = 's';
+			continue;
+		}
+		if (c == '"' || c == '\'') {
+			++i;
+			while (i < src.size() && src[i] != c && src[i] != '\n') {
+				i += src[i] == '\\' ? 2 : 1;
+			}
+			++i;
+			prev = 's';
+			continue;
+		}
+		if (is_id0(c)) {
+			std::size_t j = i;
+			while (j < src.size() && is_id(src[j])) {
+				++j;
+			}
+			std::string chain = src.substr(i, j - i);
+			const bool root = (chain == "vb" || chain == "ui" || chain == "client") && prev != '.' && prev != ':';
+			while (root && j + 1 < src.size() && src[j] == '.' && is_id0(src[j + 1])) {
+				std::size_t k = j + 1;
+				while (k < src.size() && is_id(src[k])) {
+					++k;
+				}
+				chain += src.substr(j, k - j);
+				j = k;
+			}
+			if (root && chain.find('.') != std::string::npos) {
+				out.emplace_back(chain, line);
+			}
+			i = j;
+			prev = 'a';
+			continue;
+		}
+		if (c != ' ' && c != '\t' && c != '\r') {
+			prev = c;
+		}
+		++i;
+	}
+	return out;
+}
+
+// `---@vb since` newer than the lowest engine the pack admits: the pack would load on an engine
+// that lacks the API and fail at the call.
+void report_newer_apis(CheckReport &r, const fs::path &dir, const std::vector<std::string> &files,
+		const core::SemVer &lowest, const std::string &req_text) {
+	std::map<std::string, core::SemVer> since;
+	for (const ApiSince &a : kApiSince) {
+		if (const auto v = core::parse_semver(a.since)) {
+			since[a.member] = *v;
+		}
+	}
+	for (const std::string &rel : files) {
+		const LuaEnv env = environment_of(rel);
+		if (env != LuaEnv::kServer && env != LuaEnv::kUi) {
+			continue;
+		}
+		std::set<std::string> reported;
+		for (const auto &[chain, line] : api_chains(read_file(dir / rel))) {
+			// The longest documented prefix: `vb.world.raycast(...).x` -> vb.world.raycast.
+			std::string member = chain;
+			auto it = since.find(member);
+			while (it == since.end() && member.find('.') != std::string::npos) {
+				member.erase(member.rfind('.'));
+				it = since.find(member);
+			}
+			if (it == since.end() || !(lowest < it->second) || !reported.insert(member).second) {
+				continue;
+			}
+			add(r, Severity::kWarning, rel, line, member + " is new in " + core::to_string(it->second) + ", but engine_version_req \"" + req_text + "\" also admits " + core::to_string(lowest) + " (raise it to >=" + core::to_string(it->second) + ")");
+		}
+	}
 }
 
 // §3.4.1: the static per-environment global check.
@@ -335,6 +573,7 @@ CheckReport check_pack(const fs::path &dir, const CheckOptions &options) {
 
 		// Pack `print` output would otherwise corrupt --json on stdout.
 		(void)rt.load_pack_file("print = function(...) end", "=check-pack");
+		(void)rt.load_pack_file(kRecordRegistrations, "=check-pack");
 		bool load_failed = false;
 		for (const auto &rel : order) {
 			const script::ScriptResult res = rt.load_pack_file(read_file(dir / rel), rel);
@@ -347,6 +586,9 @@ CheckReport check_pack(const fs::path &dir, const CheckOptions &options) {
 		judge[LuaEnv::kServer] = !load_failed;
 		for (const auto &name : rt.global_names()) {
 			assigned[LuaEnv::kServer].insert(name);
+		}
+		if (const auto dump = rt.eval_string("return __vb_check_dump()")) {
+			report_registrations(r, dir, *dump, known);
 		}
 
 		if (!load_failed) {
@@ -387,6 +629,13 @@ CheckReport check_pack(const fs::path &dir, const CheckOptions &options) {
 		}
 	}
 	report_globals(r, scanned, assigned, judge);
+	if (manifest.found && manifest.error.empty() && manifest.engine_version_req) {
+		if (const auto req = core::VersionReq::parse(*manifest.engine_version_req)) {
+			if (const auto lowest = req->lower_bound()) {
+				report_newer_apis(r, dir, files, *lowest, *manifest.engine_version_req);
+			}
+		}
+	}
 	dedupe_errors(r);
 	fs::remove_all(scratch, ec);
 	return r;

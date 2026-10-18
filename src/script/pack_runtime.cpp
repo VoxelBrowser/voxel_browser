@@ -84,6 +84,7 @@ void PackRuntime::flush_storage() {}
 std::uint64_t PackRuntime::storage_revision() const { return 0; }
 std::vector<std::string> PackRuntime::describe_api() { return {}; }
 std::vector<std::string> PackRuntime::global_names() { return {}; }
+std::optional<std::string> PackRuntime::eval_string(std::string_view) { return std::nullopt; }
 
 } // namespace vb::script
 
@@ -3921,6 +3922,20 @@ std::uint64_t PackRuntime::storage_revision() const {
 
 std::vector<std::string> PackRuntime::global_names() {
 	return list_lua_globals(impl_->vm);
+}
+
+std::optional<std::string> PackRuntime::eval_string(std::string_view code) {
+	sol::state &lua = impl_->lua_state();
+	impl_->vm.begin_call_budget();
+	sol::protected_function_result r = lua.safe_script(code, sol::script_pass_on_error, "=eval_string");
+	if (!r.valid()) {
+		return std::nullopt;
+	}
+	const sol::object v = r;
+	if (v.get_type() != sol::type::string) {
+		return std::nullopt;
+	}
+	return v.as<std::string>();
 }
 
 std::vector<std::string> PackRuntime::describe_api() {
