@@ -278,9 +278,11 @@ Full detail: `remaining_tasks/phase9.md`.
       automation commands click the windowed sign-in screen's buttons;
       `test_first_use_trust_prompt_asks_before_contacting_the_idp` checks nothing
       reaches the IdP before Continue and that a second client is not asked again.
-- [ ] Still open from 9.x:
-      manual sign-in runs and builds on Windows/macOS (socket/ShellExecute
-      code is unbuilt).
+- [x] Sign-in code builds on Windows/macOS: `VB_WITH_AUTH` defaults ON, so
+      both CI legs compile it (green since 2026-10-17); since 2026-10-18 the
+      loopback browser-flow unit tests run on Windows too (Winsock helper).
+- [ ] Still open from 9.x (manual): sign-in runs against real Keycloak/Firebase/
+      Google on Windows/macOS.
 
 ---
 

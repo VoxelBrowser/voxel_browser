@@ -32,7 +32,16 @@
 
 #if defined(VB_WITH_AUTH)
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -91,31 +100,43 @@ std::string query_param(const std::string &url, const std::string &key) {
 	return url.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
 }
 
-#if !defined(_WIN32)
 // Plays the browser: one GET to 127.0.0.1:<port><path>; returns the response.
+// Winsock on Windows, so the loopback listener's Windows code runs there too.
 std::string http_get_local(int port, const std::string &path) {
+#if defined(_WIN32)
+	static const bool wsa_ready = [] {
+		WSADATA wsa;
+		return WSAStartup(MAKEWORD(2, 2), &wsa) == 0;
+	}();
+	(void)wsa_ready;
+	const SOCKET fd = ::socket(AF_INET, SOCK_STREAM, 0);
+#else
 	const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+#endif
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
 	a.sin_port = htons(static_cast<std::uint16_t>(port));
 	a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	std::string out;
-	if (::connect(fd, reinterpret_cast<sockaddr *>(&a), sizeof(a)) == 0) {
+	if (::connect(fd, reinterpret_cast<sockaddr *>(&a), static_cast<int>(sizeof(a))) == 0) {
 		const std::string req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
-		::send(fd, req.data(), req.size(), 0);
+		::send(fd, req.data(), static_cast<int>(req.size()), 0);
 		char buf[1024];
 		for (;;) {
-			const auto n = ::recv(fd, buf, sizeof(buf), 0);
+			const auto n = ::recv(fd, buf, static_cast<int>(sizeof(buf)), 0);
 			if (n <= 0) {
 				break;
 			}
 			out.append(buf, static_cast<std::size_t>(n));
 		}
 	}
+#if defined(_WIN32)
+	::closesocket(fd);
+#else
 	::close(fd);
+#endif
 	return out;
 }
-#endif
 
 } // namespace
 
@@ -199,8 +220,6 @@ TEST_CASE("code exchange sends the verifier; refresh and errors are mapped") {
 	CHECK(bad.error.find("invalid_grant") != std::string::npos);
 	CHECK(bad.error.find("secret detail") == std::string::npos);
 }
-
-#if !defined(_WIN32)
 
 namespace {
 
@@ -320,8 +339,6 @@ TEST_CASE("loopback listener binds 127.0.0.1 on an ephemeral port only") {
 	CHECK(l->port() > 0);
 	CHECK(l->redirect_uri() == "http://127.0.0.1:" + std::to_string(l->port()) + "/callback");
 }
-
-#endif // !_WIN32
 
 TEST_CASE("firebase password sign-in: success, mapped errors, no leakage") {
 	struct Fake final : HttpFetcher {
@@ -529,7 +546,6 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 	CHECK(vb::protocol::C2SAuth::decode(frame->payload)->token == "FB.TOKEN.1");
 }
 
-#if !defined(_WIN32)
 // Firebase "google": the browser flow runs against Google with the pack's
 // Desktop-app client (secret included in the code exchange), then the Google
 // ID token is traded for a Firebase one, which is what reaches the server.
@@ -616,7 +632,6 @@ TEST_CASE("coordinator: firebase google sign-in goes through Google, then signIn
 	CHECK(idp->posts[0].second.find("client_secret=gsecret") != std::string::npos);
 	CHECK(idp->posts[1].first.find("signInWithIdp") != std::string::npos);
 }
-#endif
 
 TEST_CASE("coordinator: cancel ends the join with 'sign-in cancelled'") {
 	SignInCoordinator::Options o;

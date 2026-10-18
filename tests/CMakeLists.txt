@@ -82,6 +82,9 @@ target_link_libraries(vb_tests
 
 if(VB_WITH_AUTH)
   target_link_libraries(vb_tests PRIVATE nlohmann_json::nlohmann_json)
+  if(WIN32)
+    target_link_libraries(vb_tests PRIVATE ws2_32) # auth_signin_test plays the browser over Winsock
+  endif()
 endif()
 
 if(VB_WITH_LUA AND TARGET vb_pack_check)
