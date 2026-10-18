@@ -27,6 +27,7 @@
 #include "vb/auth/secret_store.hpp"
 #include "vb/auth/session_store.hpp"
 #include "vb/auth/signin.hpp"
+#include "vb/core/paths.hpp"
 #include "vb/core/version.hpp"
 #include "vb/net/handshake.hpp"
 
@@ -800,8 +801,8 @@ TEST_CASE("session store: refresh tokens go to the OS keychain when there is one
 // The real platform keychain. Opt-in (VB_TEST_REAL_KEYCHAIN=1, set by the
 // macOS and Windows CI legs) so a developer's test run never writes to theirs.
 TEST_CASE("session store: the platform keychain round-trips a token") {
-	const char *opt_in = std::getenv("VB_TEST_REAL_KEYCHAIN");
-	if (opt_in == nullptr || std::string(opt_in) != "1") {
+	const auto opt_in = vb::core::get_env("VB_TEST_REAL_KEYCHAIN"); // not getenv: C4996 under MSVC
+	if (opt_in != "1") {
 		return;
 	}
 	auto secrets = os_secret_backend();
