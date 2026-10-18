@@ -242,6 +242,7 @@ function Player:get_held_item() end
 ---Server pack VM only. `self` in `vb.register_entity` callbacks: a table (free for your own fields)
 ---whose metatable provides these methods.
 ---@class Entity
+---@field [string] any Your own per-instance fields (`self.hp = 10`).
 local Entity = {}
 
 ---@vb context runtime

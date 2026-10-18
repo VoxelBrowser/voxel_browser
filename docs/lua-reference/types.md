@@ -69,8 +69,15 @@ BlockDef[]
 | `pickup_radius?` | `number` | Dropped-item pickup radius in blocks (engine default 1.5). |
 | `item_lifetime_seconds?` | `number` | Dropped-item lifetime (engine default 120). |
 | `replaceable?` | `boolean` | A structure with `replace = "air_and_plants"` may overwrite it (default false). |
-| `on_break?` | `fun(player:` | Player, x: integer, y: integer, z: integer) Called after the block is broken. |
-| `on_place?` | `fun(player:` | Player, x: integer, y: integer, z: integer) Called after the block is placed. |
+| `on_break?` | `fun(ctx:` | BlockEditCtx) Called after the block is broken. |
+| `on_place?` | `fun(ctx:` | BlockEditCtx) Called after the block is placed. |
+
+## BlockEditCtx
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `pos` | `Vec3` | The block's position (integers). |
+| `player` | `Player` | Who broke or placed it. |
 
 ## BlockId
 
@@ -145,7 +152,7 @@ integer Numeric block id. A held item and a placeable block share one id space.
 | `represents?` | `"player"|"item_drop"` | Render players or dropped items with this kind. |
 | `on_spawn?` | `fun(self:` | Entity) |
 | `on_tick?` | `fun(self:` | Entity, dt: number) |
-| `on_hit?` | `fun(self:` | Entity, attacker: Player|nil, damage: number) |
+| `on_hit?` | `fun(self:` | Entity, amount: number, cause: string) `cause`: "" unless given (e.g. `self:damage(n, "fire")`). |
 | `on_death?` | `fun(self:` | Entity, cause: string|nil) |
 
 ## EntityKindId
@@ -261,6 +268,7 @@ table Plain tagged table built by `vb.noise.*` (not an opaque handle).
 | `height?` | `number` |  |
 | `eye_height?` | `number` |  |
 | `terminal_velocity?` | `number` |  |
+| `fall_gravity_scale?` | `number` | Read-only (`get_params`): gravity multiplier while falling. |
 
 ## PipelineDef
 
@@ -285,6 +293,7 @@ table Plain tagged table built by `vb.noise.*` (not an opaque handle).
 | `pitch` | `number` |  |
 | `buttons` | `{jump:` | boolean, sprint: boolean, primary: boolean, secondary: boolean, fly_up: boolean, fly_down: boolean} |
 | `keybinds` | `table<string,` | boolean> Only registered keybind names appear. |
+| `dt` | `number` | Seconds of play this input covers (read-only). |
 
 ## PunchResult
 

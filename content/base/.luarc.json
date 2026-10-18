@@ -9,5 +9,5 @@
     "package": "disable"
   },
   "diagnostics.disable": ["lowercase-global"],
-  "diagnostics.globals": []
+  "diagnostics.globals": ["BLOCK_IDS", "base_wood_id", "base_planks_id", "base_sticks_id", "base_stone_id"]
 }

@@ -27,8 +27,12 @@ vb = {}
 ---@field pickup_radius? number Dropped-item pickup radius in blocks (engine default 1.5).
 ---@field item_lifetime_seconds? number Dropped-item lifetime (engine default 120).
 ---@field replaceable? boolean A structure with `replace = "air_and_plants"` may overwrite it (default false).
----@field on_break? fun(player: Player, x: integer, y: integer, z: integer) Called after the block is broken.
----@field on_place? fun(player: Player, x: integer, y: integer, z: integer) Called after the block is placed.
+---@field on_break? fun(ctx: BlockEditCtx) Called after the block is broken.
+---@field on_place? fun(ctx: BlockEditCtx) Called after the block is placed.
+
+---@class BlockEditCtx
+---@field pos Vec3 The block's position (integers).
+---@field player Player Who broke or placed it.
 
 ---@vb context load
 ---@vb since 0.1.0
@@ -93,7 +97,7 @@ function vb.register_item(def) end
 ---@field represents? "player"|"item_drop" Render players or dropped items with this kind.
 ---@field on_spawn? fun(self: Entity)
 ---@field on_tick? fun(self: Entity, dt: number)
----@field on_hit? fun(self: Entity, attacker: Player|nil, damage: number)
+---@field on_hit? fun(self: Entity, amount: number, cause: string) `cause`: "" unless given (e.g. `self:damage(n, "fire")`).
 ---@field on_death? fun(self: Entity, cause: string|nil)
 
 ---@vb context load

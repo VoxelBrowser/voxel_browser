@@ -5,7 +5,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/EmbedFiles.cmake)
 set(_vb_embedded_cpp "${CMAKE_BINARY_DIR}/generated/vb_embedded_files.cpp")
 vb_embed_files("${_vb_embedded_cpp}"
   ROOT "${CMAKE_SOURCE_DIR}"
-  GLOBS "templates/pack/*" "sdk/lua/library/*.lua" "sdk/lua/luarc.template.json")
+  GLOBS "templates/pack/*" "sdk/lua/library/*.lua" "sdk/lua/luarc.template.json" "sdk/lua/luarc.ui.template.json")
 
 add_library(vb_cli_lib STATIC
   ${_vb_embedded_cpp}

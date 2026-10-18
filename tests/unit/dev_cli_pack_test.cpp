@@ -70,6 +70,11 @@ TEST_CASE("vb pack init writes every template and the editor files") {
 		CHECK(read(dir / "textures/example.png").substr(1, 3) == "PNG");
 	}
 	CHECK(fs::exists(t.path / "pack_ui" / "ui" / "hello.lua"));
+	// ui/ gets its own LuaLS config with only the UI-VM stubs.
+	const std::string ui_rc = read(t.path / "pack_ui" / "ui" / ".luarc.json");
+	CHECK(ui_rc.find("../.vb/lua/ui.lua") != std::string::npos);
+	CHECK(ui_rc.find("vb.lua") == std::string::npos);
+	CHECK_FALSE(fs::exists(t.path / "pack_minimal" / "ui" / ".luarc.json"));
 	CHECK(fs::exists(t.path / "pack_worldgen" / "worldgen.lua"));
 }
 

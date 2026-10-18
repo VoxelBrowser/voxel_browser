@@ -73,11 +73,11 @@ vb.on("player_input", function(player, input)
 		-- override (vb.physics.set_params/vb.action.set_params) can never
 		-- silently desync this raycast from the engine's own reach check.
 		local eye_height = vb.physics.get_params().eye_height
-		local reach = vb.action.get_params().reach
+		local reach = vb.action.get_params().reach --[[@as number]]
 		local origin = { x = pos.x, y = pos.y + eye_height, z = pos.z }
 		local held = player:get_held_item()
 		local hit = held and vb.world.raycast(origin, dir, reach)
-		if hit then
+		if held and hit then
 			local placed = player:place_block(
 					hit.x + hit.nx, hit.y + hit.ny, hit.z + hit.nz, held.item)
 			if placed then

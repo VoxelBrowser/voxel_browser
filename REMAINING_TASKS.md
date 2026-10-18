@@ -324,8 +324,12 @@ layout, command surface and per-phase task lists:
 
 Follow-ups:
 
-- [ ] LuaLS `--check` job in CI (pin a LuaLS release; zero warnings in `sdk/lua`), and try a nested
-      `ui/.luarc.json` for real per-environment editor warnings.
+- [x] LuaLS `--check` job in CI (2026-10-18): `scripts/luals_check.sh` pins LuaLS 3.18.2 and
+      gates on zero warnings in `sdk/lua`, both shipped packs and the `vb pack init` templates.
+      Nested `ui/.luarc.json` (UI-only stubs: `vb` in `ui/` is flagged) in both packs and written
+      by `vb pack init/types`. Fixing it to zero corrected wrong stubs: block `on_break`/`on_place`
+      take a `ctx {pos, player}`, entity `on_hit(self, amount, cause)`, `PlayerInput.dt`,
+      `fall_gravity_scale`, open `Entity` fields, the sandboxed `require`.
 - [ ] `--check-pack` warnings: block without a texture, unknown keys in `def` tables; `since`-aware
       "API newer than your `engine_version_req`" warning (§3.7 "Later").
 - [ ] Singleplayer should show an `engine_version_req` mismatch in the main menu (today: stderr + base set).

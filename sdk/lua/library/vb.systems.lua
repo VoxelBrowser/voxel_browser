@@ -20,6 +20,7 @@ vb.physics = {}
 ---@field height? number
 ---@field eye_height? number
 ---@field terminal_velocity? number
+---@field fall_gravity_scale? number Read-only (`get_params`): gravity multiplier while falling.
 
 ---@vb context load
 ---Server pack VM only. Overrides player movement tunables (only the given fields; replaces any earlier call).
