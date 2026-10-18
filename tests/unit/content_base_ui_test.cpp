@@ -105,13 +105,6 @@ TEST_CASE("content/base/ui: base:pause renders a title and a working Resume butt
 	CHECK(resume->text == "Resume");
 	CHECK(find(widgets, "signed_in") == nullptr); // no auth.lua, no login
 
-	ui.set_login(UiRuntime::LoginView{ "alex#2", "sub-2" });
-	const Widget *signed_in = find(ui.render_frame(), "signed_in");
-	REQUIRE(signed_in != nullptr);
-	CHECK(signed_in->text == "Signed in as alex#2");
-	ui.set_login(std::nullopt);
-	ui.render_frame();
-
 	// U0: client.* is callable from a modal render (not just the HUD), and
 	// the panel + backdrop are centered on the screen size.
 	const Widget *backdrop = find(widgets, "backdrop");
@@ -124,6 +117,13 @@ TEST_CASE("content/base/ui: base:pause renders a title and a working Resume butt
 	CHECK(panel->y + panel->h / 2 == doctest::Approx(360).epsilon(0.01));
 	CHECK(resume->x >= panel->x);
 	CHECK(resume->x + resume->w <= panel->x + panel->w);
+
+	// With a login (state.login), a "Signed in as" line. Last: render_frame() rebuilds the list
+	// the pointers above point into.
+	ui.set_login(UiRuntime::LoginView{ "alex#2", "sub-2" });
+	const Widget *signed_in = find(ui.render_frame(), "signed_in");
+	REQUIRE(signed_in != nullptr);
+	CHECK(signed_in->text == "Signed in as alex#2");
 
 	ui.report_click("resume");
 	CHECK_FALSE(ui.is_open());
