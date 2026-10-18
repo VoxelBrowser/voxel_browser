@@ -28,6 +28,8 @@
 | `project_id?` | `string` | Firebase project id. |
 | `api_key?` | `string` | Firebase web API key (public by design). |
 | `sign_in?` | `string[]` | Firebase methods, e.g. `{"password", "google"}`. |
+| `google_client_id?` | `string` | Firebase + "google": client id of a Google Cloud "Desktop app" OAuth client. |
+| `google_client_secret?` | `string` | Its client secret (Google requires it for Desktop apps; not secret). |
 | `name_claim?` | `string` | Claim that becomes the in-game name. |
 | `claims?` | `string[]` | Claims scripts may read from `Login.claims`. |
 | `max_token_age_seconds?` | `integer` | Default 300. |

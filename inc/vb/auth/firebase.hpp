@@ -16,6 +16,12 @@ SignInResult firebase_password_sign_in(HttpFetcher &http, const std::string &api
 		const std::string &email, const std::string &password);
 
 // POST securetoken.googleapis.com/v1/token (grant_type=refresh_token).
+// Exchanges an ID token from a federated provider (Google: `provider_id`
+// "google.com") for a Firebase ID token + refresh token (Identity Toolkit
+// accounts:signInWithIdp). The Firebase project must have that provider on.
+SignInResult firebase_idp_sign_in(HttpFetcher &http, const std::string &api_key,
+		const std::string &provider_id, const std::string &idp_id_token);
+
 SignInResult firebase_refresh(HttpFetcher &http, const std::string &api_key,
 		const std::string &refresh_token);
 

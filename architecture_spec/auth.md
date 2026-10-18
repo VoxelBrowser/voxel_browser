@@ -107,6 +107,8 @@ return {
 	project_id   = "my-game-1234",
 	api_key      = "AIza...",                   -- Firebase web API key (public by design)
 	sign_in      = { "password", "google" },    -- engine-drawn form / browser flow
+	google_client_id     = "1234-abc.apps.googleusercontent.com", -- "google": a Desktop-app OAuth client
+	google_client_secret = "GOCSPX-...",        -- Google requires it for Desktop apps; not confidential
 	name_claim   = "name",
 	claims       = { "email", "email_verified" },
 }

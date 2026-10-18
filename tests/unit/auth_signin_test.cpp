@@ -529,6 +529,95 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 	CHECK(vb::protocol::C2SAuth::decode(frame->payload)->token == "FB.TOKEN.1");
 }
 
+#if !defined(_WIN32)
+// Firebase "google": the browser flow runs against Google with the pack's
+// Desktop-app client (secret included in the code exchange), then the Google
+// ID token is traded for a Firebase one, which is what reaches the server.
+TEST_CASE("coordinator: firebase google sign-in goes through Google, then signInWithIdp") {
+	const std::string google = "https://google.example";
+	struct Idp final : HttpFetcher {
+		std::string google;
+		std::vector<std::pair<std::string, std::string>> posts; // url, body
+		HttpResult get(const std::string &url) override {
+			HttpResult r;
+			if (url == google + "/.well-known/openid-configuration") {
+				r.status = 200;
+				r.body = json{ { "issuer", google }, { "authorization_endpoint", google + "/o/oauth2/v2/auth" },
+					{ "token_endpoint", google + "/token" } }
+								 .dump();
+			}
+			return r;
+		}
+		HttpResult post(const std::string &url, const std::string &, const std::string &body) override {
+			posts.emplace_back(url, body);
+			HttpResult r;
+			r.status = 200;
+			if (url == google + "/token") {
+				r.body = R"({"id_token":"GOOGLE.ID.TOKEN","refresh_token":"google-refresh"})";
+			} else if (url.find("accounts:signInWithIdp?key=k") != std::string::npos &&
+					body.find("id_token=GOOGLE.ID.TOKEN") != std::string::npos &&
+					body.find("providerId=google.com") != std::string::npos) {
+				r.body = R"({"idToken":"FB.FROM.GOOGLE","refreshToken":"fb-refresh"})";
+			} else {
+				r.status = 400;
+				r.body = R"({"error":{"message":"INVALID_IDP_RESPONSE"}})";
+			}
+			return r;
+		}
+	};
+	auto idp = std::make_shared<Idp>();
+	idp->google = google;
+	std::string auth_url;
+	std::thread browser;
+	const auto options = [&] {
+		SignInCoordinator::Options o;
+		o.http = idp;
+		o.google_issuer = google;
+		o.open_browser = [&](const std::string &url) {
+			auth_url = url;
+			const std::string redirect = query_param(url, "redirect_uri");
+			const int port = std::stoi(redirect.substr(redirect.find("%3A", 10) + 3));
+			const std::string state = query_param(url, "state");
+			browser = std::thread([port, state] { http_get_local(port, "/callback?code=G&state=" + state); });
+			return true;
+		};
+		return o;
+	};
+	SignInRig rig(SignInCoordinator::Options{});
+	const auto restart = [&] {
+		rig.coord = std::make_unique<SignInCoordinator>(options());
+		rig.hs = std::make_unique<vb::net::ClientHandshake>(vb::net::HandshakeClientConfig{});
+		rig.hs->set_sign_in_provider(rig.coord->provider());
+		rig.hs->start();
+	};
+
+	// Without a google_client_id param the method is not offered.
+	restart();
+	rig.deliver_challenge("firebase", { { "api_key", "k" }, { "sign_in", "password,google" } });
+	CHECK_FALSE(rig.coord->supports_google());
+
+	restart();
+	rig.deliver_challenge("firebase", { { "api_key", "k" }, { "sign_in", "google" }, { "google_client_id", "gid.apps.googleusercontent.com" }, { "google_client_secret", "gsecret" } });
+	CHECK(rig.coord->supports_google());
+	CHECK_FALSE(rig.coord->supports_browser());
+	CHECK_FALSE(rig.coord->supports_password());
+	rig.coord->start_google();
+	const auto step = rig.poll_for(5000);
+	if (browser.joinable()) {
+		browser.join();
+	}
+	REQUIRE(step.send.size() == 1);
+	std::size_t consumed = 0;
+	auto frame = vb::protocol::read_frame(step.send[0].bytes, consumed);
+	CHECK(vb::protocol::C2SAuth::decode(frame->payload)->token == "FB.FROM.GOOGLE");
+	CHECK(auth_url.rfind(google + "/o/oauth2/v2/auth?", 0) == 0);
+	CHECK(query_param(auth_url, "client_id") == "gid.apps.googleusercontent.com");
+	REQUIRE(idp->posts.size() == 2);
+	CHECK(idp->posts[0].second.find("client_secret=gsecret") != std::string::npos);
+	CHECK(idp->posts[1].first.find("signInWithIdp") != std::string::npos);
+}
+#endif
+
 TEST_CASE("coordinator: cancel ends the join with 'sign-in cancelled'") {
 	SignInCoordinator::Options o;
 	SignInRig rig(std::move(o));

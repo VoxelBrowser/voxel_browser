@@ -90,7 +90,8 @@ public:
 		std::string_view server; // "host:port"
 		std::string_view provider_host; // host of the issuer, so the player sees who they sign in with
 		bool needs_trust = false; // first use of this (server, issuer): ask before contacting the IdP
-		bool offer_browser = false; // oidc/keycloak: "Sign in with your browser"
+		bool offer_browser = false; // oidc/keycloak, or firebase "google": a browser sign-in
+		std::string_view browser_label = "Sign in with your browser"; // the button text
 		bool offer_password = false; // firebase e-mail/password form
 		bool working = false; // a sign-in is in flight; inputs disabled
 		std::string_view error; // previous attempt's failure, empty if none

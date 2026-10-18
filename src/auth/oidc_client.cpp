@@ -223,12 +223,15 @@ TokenResponse parse_token_response(const HttpResult &res) {
 
 TokenResponse exchange_code(HttpFetcher &http, const OidcEndpoints &ep,
 		const std::string &client_id, const std::string &redirect_uri,
-		const std::string &code, const std::string &verifier) {
-	return parse_token_response(http.post(ep.token_endpoint,
-			"application/x-www-form-urlencoded",
-			form_encode({ { "grant_type", "authorization_code" }, { "code", code },
-					{ "redirect_uri", redirect_uri }, { "client_id", client_id },
-					{ "code_verifier", verifier } })));
+		const std::string &code, const std::string &verifier, const std::string &client_secret) {
+	std::vector<std::pair<std::string, std::string>> form = { { "grant_type", "authorization_code" },
+		{ "code", code }, { "redirect_uri", redirect_uri }, { "client_id", client_id },
+		{ "code_verifier", verifier } };
+	if (!client_secret.empty()) {
+		form.emplace_back("client_secret", client_secret);
+	}
+	return parse_token_response(http.post(ep.token_endpoint, "application/x-www-form-urlencoded",
+			form_encode(form)));
 }
 
 TokenResponse refresh_id_token(HttpFetcher &http, const OidcEndpoints &ep,
@@ -521,7 +524,7 @@ SignInResult oidc_browser_sign_in(const OidcSignInParams &params,
 		}
 		listener->respond(true);
 		const TokenResponse tok = exchange_code(*params.http, *endpoints, params.client_id,
-				redirect_uri, parsed.code, pkce.verifier);
+				redirect_uri, parsed.code, pkce.verifier, params.client_secret);
 		if (!tok.ok) {
 			return failure("The identity provider rejected the sign-in");
 		}

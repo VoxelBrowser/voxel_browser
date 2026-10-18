@@ -38,6 +38,12 @@ std::shared_ptr<AuthService> install_external_auth(net::HandshakeServerHost &hos
 				methods += m == FirebaseSignIn::kPassword ? "password" : "google";
 			}
 			c.params.emplace_back("sign_in", methods);
+			if (!auth.google_client_id.empty()) {
+				c.params.emplace_back("google_client_id", auth.google_client_id);
+				if (!auth.google_client_secret.empty()) {
+					c.params.emplace_back("google_client_secret", auth.google_client_secret);
+				}
+			}
 		}
 		return c;
 	};

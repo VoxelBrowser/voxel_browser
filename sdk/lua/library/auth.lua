@@ -1,6 +1,7 @@
 ---@meta
 -- `auth.lua` in a pack root: declarative, read once at server startup in its own tiny sandbox.
--- It must `return` a table of this shape (no `vb`, no loops, no I/O). No client secrets (PKCE only).
+-- It must `return` a table of this shape (no `vb`, no loops, no I/O). No client secrets (PKCE only),
+-- except Google's Desktop-app secret, which Google itself documents as not confidential.
 -- A malformed file stops the server from starting.
 
 ---@class AuthConfig
@@ -12,6 +13,8 @@
 ---@field project_id? string Firebase project id.
 ---@field api_key? string Firebase web API key (public by design).
 ---@field sign_in? string[] Firebase methods, e.g. `{"password", "google"}`.
+---@field google_client_id? string Firebase + "google": client id of a Google Cloud "Desktop app" OAuth client.
+---@field google_client_secret? string Its client secret (Google requires it for Desktop apps; not secret).
 ---@field name_claim? string Claim that becomes the in-game name.
 ---@field claims? string[] Claims scripts may read from `Login.claims`.
 ---@field max_token_age_seconds? integer Default 300.

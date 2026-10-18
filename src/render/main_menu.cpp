@@ -458,7 +458,8 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 		y += 30.0f;
 	} else {
 		if (view.offer_browser) {
-			if (GuiButton(Rectangle{ x, y, w, 32.0f }, "Sign in with your browser")) {
+			const std::string label(view.browser_label);
+			if (GuiButton(Rectangle{ x, y, w, 32.0f }, label.c_str())) {
 				result.browser = true;
 			}
 			y += 44.0f;

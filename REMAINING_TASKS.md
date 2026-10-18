@@ -265,9 +265,12 @@ Full detail: `remaining_tasks/phase9.md`.
       (macOS Keychain, Windows Credential Manager, libsecret via dlopen), file
       fallback, file tokens migrate in; real-keychain test on the macOS/Windows
       legs and against gnome-keyring on Linux debug x86_64.
-- [ ] Still open from 9.x: Firebase
-      `google` sign-in (needs a Google OAuth client id key in `auth.lua`);
-      `state.login` in the client UI VM; first-use trust prompt at e2e level;
+- [x] Firebase `google` sign-in (2026-10-18): `auth.lua` `google_client_id`/
+      `google_client_secret` (a Google "Desktop app" client), browser flow
+      against Google then `accounts:signInWithIdp`; "Sign in with Google" on
+      the sign-in screen. Unit-tested with a fake Google over a real loopback
+      socket; not run against real Google.
+- [ ] Still open from 9.x: `state.login` in the client UI VM; first-use trust prompt at e2e level;
       manual sign-in runs and builds on Windows/macOS (socket/ShellExecute
       code is unbuilt).
 

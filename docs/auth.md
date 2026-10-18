@@ -67,7 +67,9 @@ return {
 	provider   = "firebase",
 	project_id = "my-game-1234",
 	api_key    = "AIza...",                -- web API key (public by design)
-	sign_in    = { "password" },           -- engine-drawn e-mail/password form
+	sign_in    = { "password", "google" }, -- e-mail/password form; "Sign in with Google" (browser)
+	google_client_id     = "1234-abc.apps.googleusercontent.com", -- needed for "google"
+	google_client_secret = "GOCSPX-...",   -- Google's Desktop-app secret (not confidential)
 	name_claim = "name",
 	claims     = { "email", "email_verified" },
 }
@@ -75,9 +77,15 @@ return {
 
 Enable *Email/Password* in the console. The issuer/audience are derived from `project_id`; keys
 come from Google's published `securetoken` JWKS. The password goes from the player's machine
-straight to Google, never to your server. (`"google"` sign-in is listed in the design but not
-implemented yet — the screen only offers `password`.) Revoke with `revokeRefreshTokens` or by
-disabling the account.
+straight to Google, never to your server. Revoke with `revokeRefreshTokens` or by disabling the
+account.
+
+`"google"`: enable the *Google* provider in the Firebase console, then in Google Cloud (same
+project) create an OAuth client of type **Desktop app** and put its id and secret in `auth.lua`.
+The client opens the system browser on Google's sign-in with that client (PKCE, loopback redirect
+like the OIDC flow), then exchanges the Google ID token for a Firebase one
+(`accounts:signInWithIdp`); only the Firebase token reaches your server, which verifies it as
+usual. The refresh token kept afterwards is Firebase's.
 
 ## 4. What the server checks
 

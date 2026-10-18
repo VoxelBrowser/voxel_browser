@@ -212,7 +212,9 @@ void ClientApp::draw_sign_in() {
 	host = host.substr(0, host.find('/'));
 	view.provider_host = host;
 	view.needs_trust = sign_in->needs_trust();
-	view.offer_browser = sign_in->supports_browser();
+	const bool google = sign_in->supports_google();
+	view.offer_browser = sign_in->supports_browser() || google;
+	view.browser_label = google ? "Sign in with Google" : "Sign in with your browser";
 	view.offer_password = sign_in->supports_password();
 	view.working = sign_in->phase() == Phase::kWorking;
 	const std::string last_error = sign_in->last_error();
@@ -228,7 +230,11 @@ void ClientApp::draw_sign_in() {
 	} else if (ui.trust) {
 		sign_in->trust();
 	} else if (ui.browser) {
-		sign_in->start_browser();
+		if (google) {
+			sign_in->start_google();
+		} else {
+			sign_in->start_browser();
+		}
 	} else if (ui.submit_password) {
 		sign_in->start_password(ui.email, ui.password);
 		std::fill(ui.password.begin(), ui.password.end(), '\0');
@@ -265,7 +271,9 @@ void ClientApp::draw_reauth_prompt() {
 	}
 	host = host.substr(0, host.find('/'));
 	view.provider_host = host;
-	view.offer_browser = sign_in->supports_browser();
+	const bool google = sign_in->supports_google();
+	view.offer_browser = sign_in->supports_browser() || google;
+	view.browser_label = google ? "Sign in with Google" : "Sign in with your browser";
 	view.offer_password = sign_in->supports_password();
 	using Phase = vb::auth::SignInCoordinator::Phase;
 	view.working = sign_in->phase() == Phase::kWorking;
@@ -275,7 +283,11 @@ void ClientApp::draw_reauth_prompt() {
 	if (ui.cancel) {
 		reauth_panel_open = false; // only closes the panel; the request stays open
 	} else if (ui.browser) {
-		sign_in->start_browser();
+		if (google) {
+			sign_in->start_google();
+		} else {
+			sign_in->start_browser();
+		}
 	} else if (ui.submit_password) {
 		sign_in->start_password(ui.email, ui.password);
 		std::fill(ui.password.begin(), ui.password.end(), '\0');
