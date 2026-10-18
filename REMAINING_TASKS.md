@@ -255,8 +255,13 @@ Full detail: `remaining_tasks/phase9.md`.
       password), re-auth / revocation + `SessionStore`, singleplayer / `vb` /
       e2e, hardening (per-IP sign-in rate limit), mock-Keycloak testing
       checked against real Keycloak 26.7.5.
-- [ ] Still open from 9.x: libFuzzer targets (a deterministic mutation test
-      stands in); OS keychain for refresh tokens (0600 files today); Firebase
+- [x] libFuzzer targets (2026-10-18): `tests/fuzz/` `fuzz_protocol` (every
+      wire decoder, frames, chunk codec, LZ4) and `fuzz_auth` (ID tokens,
+      JWKS, loopback redirect, player names); ctest replay on every leg, CI
+      `fuzz` job. Found and fixed: a wrapping run-length check in
+      `rle_decode`/`decode_chunk_payload` (a server could crash clients) and a
+      trailing space left by `sanitize_player_name`'s 32-byte cut.
+- [ ] Still open from 9.x: OS keychain for refresh tokens (0600 files today); Firebase
       `google` sign-in (needs a Google OAuth client id key in `auth.lua`);
       `state.login` in the client UI VM; first-use trust prompt at e2e level;
       manual sign-in runs and builds on Windows/macOS (socket/ShellExecute

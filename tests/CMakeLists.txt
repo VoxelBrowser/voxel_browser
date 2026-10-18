@@ -137,6 +137,9 @@ set_target_properties(vb_tests PROPERTIES
 
 add_test(NAME vb_tests COMMAND vb_tests --no-intro --force-colors=off)
 
+# Fuzz targets (tests/fuzz/): libFuzzer executables with VB_BUILD_FUZZERS, corpus-replay tests otherwise.
+add_subdirectory(fuzz)
+
 # Smoke tests: the binaries start, print, and exit cleanly headless.
 if(VB_BUILD_SERVER)
   add_test(NAME server_smoke COMMAND voxel_browser_server --ticks 2 --tick-rate 60)
