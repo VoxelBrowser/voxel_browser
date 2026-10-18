@@ -6,6 +6,8 @@
 #include <mutex>
 #include <string>
 
+#include "vb/core/paths.hpp" // get_env: getenv draws C4996 (an error) under MSVC
+
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -32,8 +34,8 @@ namespace {
 constexpr const char *kService = "voxel_browser";
 
 bool disabled_by_env() {
-	const char *v = std::getenv("VB_KEYCHAIN");
-	return v != nullptr && (std::strcmp(v, "off") == 0 || std::strcmp(v, "0") == 0 || std::strcmp(v, "file") == 0);
+	const auto v = vb::core::get_env("VB_KEYCHAIN");
+	return v && (*v == "off" || *v == "0" || *v == "file");
 }
 
 #if defined(_WIN32)
