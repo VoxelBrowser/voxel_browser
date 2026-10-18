@@ -238,6 +238,18 @@ public:
 	};
 	void set_player_status(std::optional<StatusView> status);
 
+	// Who this client is signed in as, for "Signed in as ..." labels: every
+	// render_fn's `state.login` is a read-only `{ name = .., subject = .. }`
+	// (the in-game name the server gave the player, and the identity
+	// provider's stable account id), or nil when the server has no auth.lua.
+	// Never tokens or claims (architecture_spec/auth.md §6). The engine owns
+	// `state.login`: it is rewritten before every render.
+	struct LoginView {
+		std::string name;
+		std::string subject;
+	};
+	void set_login(std::optional<LoginView> login);
+
 	// Evaluates the registered HUD render_fn (no-op, returning the last --
 	// likely empty -- list if none was ever registered via
 	// ui.define_hud) and returns the fresh widget list. Call once per UI

@@ -43,6 +43,16 @@ def test_login_reaches_pack_scripts(idp, auth_server, make_clients, tmp_path):
     expect(bob).to_have_chat("login=sub-bob/b@example.com")
 
 
+def test_ui_scripts_see_who_is_signed_in(idp, auth_server, make_clients, tmp_path):
+    # The UI VM's state.login (the server-given name + the IdP subject); base:pause shows it.
+    server = auth_server()
+    f = token_file(tmp_path, idp.mint("sub-dana", "dana"))
+    (dana,) = make_clients(server)(1, names=["NotDana"], extra_args=["--auth-token-file", str(f)])
+    dana.key_press("pause")
+    expect(dana).to_have_ui_open("base:pause")
+    expect(dana).to_have_widget("signed_in", text="Signed in as dana")
+
+
 @pytest.mark.parametrize("why,kwargs", [
     ("expired", {"iat": int(time.time()) - 4000, "exp": int(time.time()) - 3000}),
     ("wrong audience", {"aud": "someone-else"}),

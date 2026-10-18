@@ -56,6 +56,36 @@ TEST_CASE("ui.define + open() + render_frame() produces the expected widget list
 	CHECK(&ui.widgets() == &widgets);
 }
 
+// state.login (Phase 9.4/9.5): engine-owned, read-only, nil without auth.
+TEST_CASE("state.login is the signed-in player, read-only, and nil without one") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		seen = {}
+		local function look(where, state)
+			if state.login then
+				local ok = pcall(function() state.login.name = "hacked" end)
+				seen[where] = state.login.name .. "|" .. state.login.subject .. "|" .. tostring(ok)
+			else
+				seen[where] = "nil"
+			end
+			return { widgets = { { id = "l", type = "label", x = 0, y = 0, w = 10, h = 10, text = seen[where] } } }
+		end
+		ui.define("who", function(state) return look("screen", state) end)
+		ui.define_hud(function(state) return look("hud", state) end)
+	)"));
+	ui.open("who", "{}");
+	REQUIRE(ui.render_frame().size() == 1);
+	CHECK(ui.render_frame()[0].text == "nil");
+	CHECK(ui.render_hud()[0].text == "nil");
+
+	ui.set_login(UiRuntime::LoginView{ "alex#2", "sub-2" });
+	CHECK(ui.render_frame()[0].text == "alex#2|sub-2|false"); // the write raised
+	CHECK(ui.render_hud()[0].text == "alex#2|sub-2|false");
+
+	ui.set_login(std::nullopt);
+	CHECK(ui.render_hud()[0].text == "nil");
+}
+
 TEST_CASE("render_frame() re-evaluates every call, reflecting state mutated by a click handler") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
@@ -217,8 +247,8 @@ TEST_CASE("close() invokes on_close (from the latest frame) exactly once and cle
 }
 
 TEST_CASE("ui.define_hud + render_hud() composes a progress bar entirely in "
-		"Lua from the raw kRect primitive + client.break_progress()/"
-		"screen_size() (Phase 6.16)") {
+		  "Lua from the raw kRect primitive + client.break_progress()/"
+		  "screen_size() (Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -266,7 +296,7 @@ TEST_CASE("ui.define_hud + render_hud() composes a progress bar entirely in "
 }
 
 TEST_CASE("ui.define with an \"icon\" widget carries its item id and tint "
-		"(REMAINING_TASKS.md Phase 4's item grid widget gap)") {
+		  "(REMAINING_TASKS.md Phase 4's item grid widget gap)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define("test", function(state)
@@ -355,7 +385,7 @@ TEST_CASE("client.my_appearance() is nil when no session is attached") {
 }
 
 TEST_CASE("render_hud() is a safe no-op when no HUD was ever registered "
-		"(Phase 6.16)") {
+		  "(Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file("-- no ui.define_hud call"));
 	ui.set_break_progress(0.9f);
@@ -363,7 +393,7 @@ TEST_CASE("render_hud() is a safe no-op when no HUD was ever registered "
 }
 
 TEST_CASE("the HUD's state table persists across render_hud() calls, "
-		"independent of any modal ui.define screen (Phase 6.16)") {
+		  "independent of any modal ui.define screen (Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -415,7 +445,7 @@ TEST_CASE("client.time() and client.mouse_position() read back what was set") {
 }
 
 TEST_CASE("client.health()/client.hunger() are nil until a status is set, "
-		"then report current/max") {
+		  "then report current/max") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -433,8 +463,8 @@ TEST_CASE("client.health()/client.hunger() are nil until a status is set, "
 }
 
 TEST_CASE("report_hud_click invokes a HUD widget's on_click callback, "
-		"distinct from a modal screen's own widget_by_id map (REMAINING_TASKS' "
-		"'HUD widgets aren't wired to report_click/report_change' gap)") {
+		  "distinct from a modal screen's own widget_by_id map (REMAINING_TASKS' "
+		  "'HUD widgets aren't wired to report_click/report_change' gap)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		hud_clicked = false
@@ -460,7 +490,7 @@ TEST_CASE("report_hud_click invokes a HUD widget's on_click callback, "
 }
 
 TEST_CASE("report_hud_change/report_hud_list_change invoke a HUD widget's "
-		"on_change callback") {
+		  "on_change callback") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		last_text = nil

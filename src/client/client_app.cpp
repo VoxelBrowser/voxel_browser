@@ -1004,7 +1004,18 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 					(void)id;
 					other_names.push_back(name);
 				}
-				ui_runtime.set_player_list(config.player_name, std::move(other_names));
+				// The server's name for us (v33), which auth or "#2" may have changed.
+				const auto &accept = client->join_accept();
+				const std::string &own = accept && !accept->your_name.empty() ? accept->your_name : config.player_name;
+				ui_runtime.set_player_list(own, std::move(other_names));
+#if defined(VB_WITH_AUTH)
+				const std::string subject = sign_in ? sign_in->signed_in_subject() : std::string();
+				if (!subject.empty()) {
+					ui_runtime.set_login(vb::script::UiRuntime::LoginView{ own, subject });
+				} else {
+					ui_runtime.set_login(std::nullopt);
+				}
+#endif
 			}
 			ui_runtime.set_chat({ chat_log.begin(), chat_log.end() }, chat_open);
 			ui_runtime.set_mouse_captured(mouse_captured);

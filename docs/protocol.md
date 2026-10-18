@@ -4,7 +4,13 @@
 > as any change to a struct in `inc/vb/protocol/`, and bump
 > `kEngineProtocolVersion` in `cmake/version.hpp.in`.
 
-Current `ENGINE_PROTOCOL_VERSION`: **32**.
+Current `ENGINE_PROTOCOL_VERSION`: **33**.
+
+- **33** — `S2C_JoinAccept` ends with `string your_name` (≤ 64 bytes,
+  `kMaxJoinNameBytes`; longer ⇒ `kLengthExceeded`): the name the server
+  gave the player, which can differ from `C2S_Auth.player_name` (auth.lua's
+  `name_claim`, sanitizing, `#2` suffixes). The client shows it as its own
+  name (`client.player_name()`) and in the UI VM's `state.login.name`.
 
 - **32** — Entity labels, clips, attachments, layers and real on-ground flags.
   - New `S2C_EntityProps` (61, lane `kFeedback`, reliable ordered): `u32
@@ -450,7 +456,7 @@ buffered, and yields `consumed` so a stream reader can advance.
 | `S2C_ReauthRequest` (9)  | v29+, wire format only until Phase 9.6: `string nonce`, `u16 grace_seconds` |
 | `C2S_Reauth` (10)        | v29+, wire format only until Phase 9.6: `string token` (≤ 16 KiB)      |
 | `C2S_Ready` (5)          | *(empty)*                                                              |
-| `S2C_JoinAccept` (6)     | `u32 net_id`, `f64×3 spawn_pos`, `u64 world_seed`, `u32 time_of_day`   |
+| `S2C_JoinAccept` (6)     | `u32 net_id`, `f64×3 spawn_pos`, `u64 world_seed`, `u32 time_of_day`, `string your_name` (v33) |
 | `S2C_Disconnect` (7)     | `u8 reason`, `string message`                                          |
 
 `auth_mode`: `0 = none`, `1 = token`. `reason`: see `DisconnectReason` (0 unknown,

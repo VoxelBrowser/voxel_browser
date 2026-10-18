@@ -8,7 +8,7 @@
 
 context: **ui**
 
-Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`.
+Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`. `state.login` is engine-owned: a read-only `{ name, subject }` when the server's pack has an auth.lua, else nil.
 
 | Parameter | Type | Description |
 | --- | --- | --- |

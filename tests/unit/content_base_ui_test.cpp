@@ -103,6 +103,14 @@ TEST_CASE("content/base/ui: base:pause renders a title and a working Resume butt
 	REQUIRE(resume != nullptr);
 	CHECK(resume->type == WidgetType::kButton);
 	CHECK(resume->text == "Resume");
+	CHECK(find(widgets, "signed_in") == nullptr); // no auth.lua, no login
+
+	ui.set_login(UiRuntime::LoginView{ "alex#2", "sub-2" });
+	const Widget *signed_in = find(ui.render_frame(), "signed_in");
+	REQUIRE(signed_in != nullptr);
+	CHECK(signed_in->text == "Signed in as alex#2");
+	ui.set_login(std::nullopt);
+	ui.render_frame();
 
 	// U0: client.* is callable from a modal render (not just the HUD), and
 	// the panel + backdrop are centered on the screen size.

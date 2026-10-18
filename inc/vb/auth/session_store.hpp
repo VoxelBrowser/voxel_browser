@@ -70,4 +70,8 @@ private:
 // name, email, then sub. For the menu only; never used for identity.
 std::string label_from_id_token(const std::string &id_token);
 
+// The (unverified) `sub` claim, empty if none. The client's own account id for
+// the UI VM's state.login; the server verified the same token.
+std::string subject_from_id_token(const std::string &id_token);
+
 } // namespace vb::auth

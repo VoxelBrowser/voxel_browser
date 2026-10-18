@@ -367,6 +367,7 @@ ServerHandshakeStep ServerHandshake::on_frame(const Frame &frame) {
 			accept.spawn_pos = grant_.spawn_pos;
 			accept.world_seed = grant_.world_seed;
 			accept.time_of_day = grant_.time_of_day;
+			accept.your_name = player_name_.substr(0, protocol::kMaxJoinNameBytes);
 			step.send.push_back(frame_message(accept));
 			step.completed = true;
 			step.player_name = player_name_;

@@ -264,6 +264,15 @@ bool SessionStore::trust(const std::string &server, const std::string &issuer) {
 	return write_private(dir_ / "trust.json", doc.dump());
 }
 
+std::string subject_from_id_token(const std::string &id_token) {
+	const JwsParse p = parse_jws(id_token);
+	if (!p.jws) {
+		return {};
+	}
+	const json c = json::parse(p.jws->payload_json, nullptr, false);
+	return c.is_object() ? get(c, "sub").substr(0, 256) : std::string();
+}
+
 std::string label_from_id_token(const std::string &id_token) {
 	const JwsParse p = parse_jws(id_token);
 	if (!p.jws) {

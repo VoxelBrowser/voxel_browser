@@ -270,7 +270,11 @@ Full detail: `remaining_tasks/phase9.md`.
       against Google then `accounts:signInWithIdp`; "Sign in with Google" on
       the sign-in screen. Unit-tested with a fake Google over a real loopback
       socket; not run against real Google.
-- [ ] Still open from 9.x: `state.login` in the client UI VM; first-use trust prompt at e2e level;
+- [x] `state.login` in the client UI VM (2026-10-18): read-only `{ name,
+      subject }` in every screen/HUD `state`; `S2C_JoinAccept.your_name`
+      (protocol 33) so the client knows its server-given name (also used for
+      `client.player_name()`); base `pause.lua` shows "Signed in as …".
+- [ ] Still open from 9.x: first-use trust prompt at e2e level;
       manual sign-in runs and builds on Windows/macOS (socket/ShellExecute
       code is unbuilt).
 

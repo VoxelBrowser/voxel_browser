@@ -55,7 +55,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 
 [Full reference](ui.md)
 
-- [`ui.define(name, render_fn)`](ui.md#ui-define) — Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`.
+- [`ui.define(name, render_fn)`](ui.md#ui-define) — Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`. `state.login` is engine-owned: a read-only `{ name, subject }` when the server's pack has an auth.lua, else nil.
 - [`ui.define_hud(render_fn)`](ui.md#ui-define-hud) — Client UI VM only. Registers the single always-on HUD (evaluated every frame, never opened or closed).
 - [`ui.send_event(kind, value)`](ui.md#ui-send-event) — Client UI VM only. Sends a UI event to the server (`ui_event` handler); the screen and widget are filled in automatically.
 - [`ui.close(opts)`](ui.md#ui-close) — Client UI VM only. Closes the current screen (always notifies the server with a "close" event). By default the mouse stays free; `capture_mouse = true` drops the player back into the game, and the click that closed the screen is not sent as a punch. Calling it from the screen's own render function is fine: the screen closes right after that render returns.

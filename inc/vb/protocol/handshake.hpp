@@ -76,6 +76,7 @@ struct C2SHello {
 
 // Cap on S2CServerInfo::engine_version_req (a short comparator list).
 inline constexpr std::size_t kMaxEngineVersionReqBytes = 128;
+inline constexpr std::size_t kMaxJoinNameBytes = 64;
 
 struct S2CServerInfo {
 	static constexpr MessageType kType = MessageType::kS2CServerInfo;
@@ -171,6 +172,10 @@ struct S2CJoinAccept {
 	core::Vec3d spawn_pos{};
 	std::uint64_t world_seed = 0;
 	std::uint32_t time_of_day = 0; // ticks into the day cycle
+	// The name the server gave this player (protocol v33): after auth.lua's
+	// name_claim, sanitizing and "#2" de-duplication it can differ from the
+	// name the client asked for. <= kMaxJoinNameBytes.
+	std::string your_name;
 
 	void encode(std::vector<std::byte> &out) const;
 	static Decoded<S2CJoinAccept> decode(std::span<const std::byte> in);

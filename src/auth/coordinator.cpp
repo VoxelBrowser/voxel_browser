@@ -113,11 +113,13 @@ SignInCoordinator::provider() {
 		}
 		if (options_.token_file) {
 			const auto path = *options_.token_file;
-			return [path]() -> net::TokenPoll {
+			return [this, path]() -> net::TokenPoll {
 				net::TokenPoll p;
 				p.done = true;
 				if (auto t = read_token_file(path)) {
 					p.token = std::move(*t);
+					std::lock_guard lock(mu_);
+					subject_ = subject_from_id_token(p.token);
 				} else {
 					p.error = "could not read the sign-in token file";
 				}
@@ -134,11 +136,13 @@ SignInCoordinator::reauth_provider() {
 		if (options_.token_file) {
 			// Re-read for every re-auth so a test can rotate or withhold it.
 			const auto path = *options_.token_file;
-			return [path]() -> net::TokenPoll {
+			return [this, path]() -> net::TokenPoll {
 				net::TokenPoll p;
 				p.done = true;
 				if (auto t = read_token_file(path)) {
 					p.token = std::move(*t);
+					std::lock_guard lock(mu_);
+					subject_ = subject_from_id_token(p.token);
 				} else {
 					p.error = "could not read the sign-in token file";
 				}
@@ -254,6 +258,7 @@ net::TokenPoll SignInCoordinator::poll_ticket() {
 		p.error = "sign-in cancelled";
 	} else if (token_ready_) {
 		p.done = true;
+		subject_ = subject_from_id_token(token_);
 		p.token = std::move(token_);
 		token_.clear();
 		token_ready_ = false;
@@ -275,6 +280,11 @@ std::optional<protocol::S2CAuthChallenge> SignInCoordinator::challenge() const {
 std::string SignInCoordinator::last_error() const {
 	std::lock_guard lock(mu_);
 	return error_;
+}
+
+std::string SignInCoordinator::signed_in_subject() const {
+	std::lock_guard lock(mu_);
+	return subject_;
 }
 
 bool SignInCoordinator::needs_trust() const {

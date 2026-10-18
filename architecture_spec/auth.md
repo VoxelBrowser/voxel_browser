@@ -337,7 +337,11 @@ A pack that needs a field asks for it by adding the claim to `auth.lua`'s
 `claims` list.
 
 Client UI VM (`ui/*.lua`) gets `state.login = { name, subject }` (read-only,
-own player only) for "Signed in as …" labels. No claims, no tokens.
+own player only) for "Signed in as …" labels. No claims, no tokens. Done
+2026-10-18: `name` comes from `S2C_JoinAccept.your_name` (protocol v33),
+`subject` from the `sub` of the token the client sent
+(`SignInCoordinator::signed_in_subject`); `UiRuntime::set_login` puts it in
+every render's `state`.
 
 ## 7. Client side
 

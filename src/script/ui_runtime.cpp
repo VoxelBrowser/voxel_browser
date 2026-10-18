@@ -49,6 +49,7 @@ void UiRuntime::set_player_list(std::string, std::vector<std::string>) {}
 void UiRuntime::set_chat(std::vector<std::string>, bool) {}
 void UiRuntime::set_inventory(std::vector<InventorySlotView>, int) {}
 void UiRuntime::set_player_status(std::optional<StatusView>) {}
+void UiRuntime::set_login(std::optional<LoginView>) {}
 const std::vector<Widget> &UiRuntime::render_hud() {
 	static const std::vector<Widget> kEmpty;
 	return kEmpty;
@@ -318,8 +319,12 @@ struct UiRuntime::Impl {
 	std::vector<UiRuntime::InventorySlotView> inventory;
 	int selected_slot = 1;
 	std::optional<UiRuntime::StatusView> player_status;
+	// state.login (set_login): a read-only proxy table, or nil.
+	std::optional<UiRuntime::LoginView> login;
+	sol::object login_table;
 
 	explicit Impl(VmLimits limits);
+	void put_login(sol::table &state);
 
 	sol::state &lua_state() { return vm.native_impl().lua; }
 	void install_bindings();
@@ -335,6 +340,13 @@ struct UiRuntime::Impl {
 UiRuntime::Impl::Impl(VmLimits limits) : vm(limits) {
 	install_bindings();
 	hud_state = lua_state().create_table();
+	login_table = sol::make_object(lua_state(), sol::lua_nil);
+}
+
+void UiRuntime::Impl::put_login(sol::table &state) {
+	if (state.valid()) {
+		state["login"] = login_table;
+	}
 }
 
 void UiRuntime::Impl::send_event(const std::string &kind, const sol::object &value) {
@@ -515,6 +527,7 @@ void UiRuntime::Impl::evaluate_frame() {
 	close_after_render = false;
 	close_after_render_capture.reset();
 	in_render = true;
+	put_login(current_state);
 	sol::protected_function_result r = current_render_fn(current_state);
 	in_render = false;
 	// A ui.close() during the render, done now that the call has returned.
@@ -579,6 +592,7 @@ void UiRuntime::Impl::evaluate_hud_frame() {
 		return;
 	}
 	vm.begin_call_budget();
+	put_login(hud_state);
 	sol::protected_function_result r = hud_render_fn(hud_state);
 	if (!r.valid()) {
 		const sol::error e = r;
@@ -800,6 +814,30 @@ void UiRuntime::set_chat(std::vector<std::string> log, bool chat_open) {
 
 void UiRuntime::set_player_status(std::optional<StatusView> status) {
 	impl_->player_status = status;
+}
+
+void UiRuntime::set_login(std::optional<LoginView> login) {
+	if (login.has_value() == impl_->login.has_value() &&
+			(!login || (login->name == impl_->login->name && login->subject == impl_->login->subject))) {
+		return; // unchanged: keep the same table, so scripts can compare it
+	}
+	impl_->login = std::move(login);
+	sol::state &lua = impl_->lua_state();
+	if (!impl_->login) {
+		impl_->login_table = sol::make_object(lua, sol::lua_nil);
+		return;
+	}
+	// A proxy: reads go to the data table, writes raise an error.
+	sol::table data = lua.create_table_with("name", impl_->login->name, "subject", impl_->login->subject);
+	sol::table meta = lua.create_table();
+	meta["__index"] = data;
+	meta["__newindex"] = [](sol::this_state, sol::object, sol::object, sol::object) {
+		throw sol::error("state.login is read-only");
+	};
+	meta["__metatable"] = false;
+	sol::table proxy = lua.create_table();
+	proxy[sol::metatable_key] = meta;
+	impl_->login_table = proxy;
 }
 
 void UiRuntime::set_inventory(std::vector<InventorySlotView> slots, int selected_slot) {

@@ -97,6 +97,10 @@ public:
 	void start_google();
 	void cancel();
 
+	// The `sub` of the last token handed to the handshake (join or re-auth),
+	// empty before the first. Feeds the UI VM's state.login.
+	std::string signed_in_subject() const;
+
 private:
 	net::TokenPoll poll_ticket();
 	void update_locked();
@@ -110,6 +114,7 @@ private:
 	std::string active_nonce_; // challenge nonce, or the open re-auth request's
 	std::string error_;
 	std::string token_;
+	std::string subject_; // of the last token delivered
 	bool token_ready_ = false;
 	bool cancelled_ = false;
 	bool needs_trust_ = false;

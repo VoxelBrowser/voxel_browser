@@ -634,6 +634,13 @@ back which widgets fired an interaction — no sol2 in the render half.
   position); anything server-authoritative still goes over `ui.send_event`.
   A callback that wants a different screen should still `ui.close()` + have
   the server `open_ui()` again.
+- **`state.login`** (screens and the HUD alike): on a server whose pack has
+  an `auth.lua`, a read-only `{ name = .., subject = .. }` — the in-game name
+  the server gave this player (after `name_claim`, sanitizing and `#2`
+  suffixes) and the identity provider's stable account id — else `nil`. For
+  "Signed in as …" labels (`content/base/ui/pause.lua` shows one); never
+  tokens or claims. The engine rewrites it before every render, so don't
+  store your own data under that key.
 - Widget types implemented: `label`, `panel`, `button`, `textbox`, `list`
   (spec's named set minus **item grid**, deferred to 5.1 — needs real
   items), plus `rect` (Phase 6.16 — see below). Each widget table: `id`,
