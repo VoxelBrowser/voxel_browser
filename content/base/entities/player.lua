@@ -29,6 +29,9 @@ vb.register_entity({
 		clips = {
 			{ clip = "idle", frames = 2, fps = 2.0 },
 			{ clip = "walk", frames = 4, fps = 6.0 },
+			-- Played by ServerSession::punch() (see mechanics.lua's
+			-- vb.combat.set_params{swing_clip=}); a crouch then a lunge.
+			{ clip = "swing", frames = 2, fps = 8.0 },
 		},
 	},
 })

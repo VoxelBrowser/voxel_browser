@@ -12,6 +12,14 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # windows-arm64 is deliberately not built yet: it compiles and links (see
+      # cmake/Dependencies.cmake, src/replication/librg_impl.c, cmake/shims) but
+      # the real-UDP GnsTransport tests fail there, and this job feeds `bundle`.
+      # Re-add `arm64` + the include below once they pass on windows-11-arm:
+      #   - arch: arm64
+      #     os: windows-11-arm
+      #     cmake_arch_keyword: arm64
+      #     vcpkg_triplet: arm64-windows
       matrix:
         target: [windows]
         arch: [x86_64]
@@ -21,11 +29,10 @@ jobs:
             cmake_build_type_keyword: Release
           - build_type: debug
             cmake_build_type_keyword: RelWithDebInfo
-          - os: windows-latest
-            target: windows
-          - target: windows
-            arch: x86_64
+          - arch: x86_64
+            os: windows-latest
             cmake_arch_keyword: x64
+            vcpkg_triplet: x64-windows
 
     steps:
       - name: Check out code
@@ -42,7 +49,7 @@ jobs:
         # protobuf's own CMake only emits a discoverable config as part of an
         # install step, so FetchContent-ing its source doesn't work (see
         # cmake/Dependencies.cmake) — a real package manager install is needed.
-        run: "%VCPKG_INSTALLATION_ROOT%\\vcpkg install protobuf:x64-windows"
+        run: "%VCPKG_INSTALLATION_ROOT%\\vcpkg install protobuf:${{ matrix.vcpkg_triplet }}"
 
       - name: Configure
         shell: cmd
@@ -56,6 +63,7 @@ jobs:
             -DVB_WITH_REPLICATION=ON ^
             -DVB_WITH_COMPRESSION=ON ^
             -DVB_DISTRIBUTION=ON ^
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.vcpkg_triplet }} ^
             -DCMAKE_TOOLCHAIN_FILE=%VCPKG_INSTALLATION_ROOT%\scripts\buildsystems\vcpkg.cmake
 
       - name: Build
@@ -65,6 +73,9 @@ jobs:
       - name: Test
         shell: cmd
         working-directory: build
+        env:
+          # Also exercise the real OS keychain (session store tests; opt-in so local runs never do).
+          VB_TEST_REAL_KEYCHAIN: "1"
         run: ctest --output-on-failure
 
       - name: Set up Python

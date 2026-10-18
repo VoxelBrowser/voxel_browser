@@ -61,6 +61,8 @@ public:
 		// retried this often while the server's request is open; the stored refresh
 		// token is kept. Tests shorten it.
 		std::chrono::milliseconds reauth_retry_interval = std::chrono::seconds(5);
+		// Firebase "google" sign-in signs in to this issuer first. Tests point it at a fake.
+		std::string google_issuer = "https://accounts.google.com";
 	};
 
 	explicit SignInCoordinator(Options options);
@@ -87,9 +89,17 @@ public:
 
 	bool supports_browser() const; // oidc / keycloak
 	bool supports_password() const; // firebase with "password" in sign_in
+	// firebase with "google" in sign_in: the browser flow against Google, then
+	// the Google ID token is exchanged for a Firebase one.
+	bool supports_google() const;
 	void start_browser();
 	void start_password(const std::string &email, const std::string &password);
+	void start_google();
 	void cancel();
+
+	// The `sub` of the last token handed to the handshake (join or re-auth),
+	// empty before the first. Feeds the UI VM's state.login.
+	std::string signed_in_subject() const;
 
 private:
 	net::TokenPoll poll_ticket();
@@ -104,6 +114,7 @@ private:
 	std::string active_nonce_; // challenge nonce, or the open re-auth request's
 	std::string error_;
 	std::string token_;
+	std::string subject_; // of the last token delivered
 	bool token_ready_ = false;
 	bool cancelled_ = false;
 	bool needs_trust_ = false;

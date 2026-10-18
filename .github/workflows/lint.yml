@@ -57,3 +57,16 @@ jobs:
 
       - name: Check the generated Lua docs are up to date
         run: python3 scripts/gen_lua_docs.py --check
+
+  # LuaLS (pinned in scripts/luals_check.sh) over the stubs, content/base, the kitchen-sink example
+  # (each with its ui/ folder checked against the UI-only stubs) and the `vb pack init` templates:
+  # any warning fails. The stubs are what pack authors' editors see, so a wrong signature in them is
+  # a bug even when the engine is right.
+  luals:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: LuaLS --check
+        run: scripts/luals_check.sh

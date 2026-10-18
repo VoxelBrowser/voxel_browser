@@ -29,6 +29,9 @@ the most common mistake, and `vb pack check` reports it.
 
 `.luarc.json` and `.vb/lua/` give the Lua Language Server (VS Code "Lua" by sumneko, Neovim, ...)
 completion and hover docs for the whole API. Refresh the stubs with `vb pack types`.
+If the pack has a `ui/` folder, `ui/.luarc.json` knows only the client UI API: add `ui/` as a second
+folder of your editor workspace (VS Code: *File → Add Folder to Workspace*) and using `vb` there is
+flagged, as it would fail at run time.
 
 ## Docs
 

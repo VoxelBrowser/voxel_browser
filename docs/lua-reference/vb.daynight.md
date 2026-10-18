@@ -6,7 +6,7 @@
 
 `vb.daynight.set_curve(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Replaces the sky gradient. `keyframes` must be non-empty.
 
@@ -25,7 +25,7 @@ vb.daynight.set_curve{ keyframes = {
 
 `vb.daynight.set_day_length(seconds)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Real seconds one in-game day takes (> 0).
 

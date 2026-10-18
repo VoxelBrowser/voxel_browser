@@ -6,7 +6,7 @@
 
 `client.break_progress() -> number|nil`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. `nil`, or 0..1 while holding to break a block.
 
@@ -20,7 +20,7 @@ local p = client.break_progress()
 
 `client.screen_size() -> {width:`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Window size in pixels.
 
@@ -34,7 +34,7 @@ local s = client.screen_size(); print(s.width, s.height)
 
 `client.time() -> number`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Monotonic seconds, for presentation timing.
 
@@ -48,7 +48,7 @@ local pulse = math.sin(client.time() * 4)
 
 `client.mouse_position() -> {x:`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Cursor position in window pixels.
 
@@ -62,7 +62,7 @@ local m = client.mouse_position()
 
 `client.player_name() -> string`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Local player's name.
 
@@ -76,7 +76,7 @@ local me = client.player_name()
 
 `client.players() -> string[]`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Names of the other connected players.
 
@@ -90,7 +90,7 @@ for _, n in ipairs(client.players()) do print(n) end
 
 `client.chat_log() -> string[]`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Chat lines, oldest first.
 
@@ -104,7 +104,7 @@ local lines = client.chat_log()
 
 `client.chat_open() -> boolean`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Whether the chat input is open.
 
@@ -118,7 +118,7 @@ if client.chat_open() then end
 
 `client.capture_mouse(on)`
 
-context: **ui**
+context: **ui** · since: **0.1.5**
 
 Client UI VM only. Asks the client to capture (`true`) or release (`false`) the mouse. A capture waits until no screen and no chat box are open; the last request wins.
 
@@ -134,7 +134,7 @@ client.capture_mouse(true)
 
 `client.mouse_captured() -> boolean`
 
-context: **ui**
+context: **ui** · since: **0.1.5**
 
 Client UI VM only. Whether the mouse is captured (looking around) right now.
 
@@ -148,7 +148,7 @@ if not client.mouse_captured() then end
 
 `client.inventory() -> {name:`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Inventory slots (`item` 0 = empty); live.
 
@@ -162,7 +162,7 @@ for i, s in ipairs(client.inventory()) do print(i, s.name, s.count) end
 
 `client.selected_slot() -> integer`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. 1-based selected hotbar slot.
 
@@ -172,11 +172,26 @@ Returns `integer`
 local slot = client.selected_slot()
 ```
 
+## client.my_appearance
+
+`client.my_appearance() -> {texture?:`
+
+context: **ui** · since: **0.1.8**
+
+Client UI VM only. The local player's own appearance as set by `player:set_visual_override`, or `nil` when the pack set none. Only the fields the override sets are present. Feed `texture` / `layers[i].texture` to `sprite` widgets for a wardrobe preview.
+
+Returns `{texture?:` — string, frame_width?: integer, frame_height?: integer, facings?: integer, layers?: {texture: string, below: boolean, rows: integer, tint: integer[]}[]}|nil
+
+```lua
+local me = client.my_appearance()
+if me and me.layers then print(#me.layers, "layers") end
+```
+
 ## client.health
 
 `client.health() -> {current:`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Local health, or `nil` before the first status arrives.
 
@@ -190,7 +205,7 @@ local h = client.health(); if h then print(h.current .. "/" .. h.max) end
 
 `client.hunger() -> {current:`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Local hunger, or `nil` before the first status arrives.
 

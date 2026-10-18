@@ -10,6 +10,7 @@
 local Player = {}
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Current position.
 ---```lua
 ---local p = player:get_pos() -- {x=, y=, z=}
@@ -18,6 +19,7 @@ local Player = {}
 function Player:get_pos() end
 
 ---@vb context runtime
+---@vb since 0.1.3
 ---Server pack VM only. Teleports the player: feet position, velocity zeroed,
 ---look direction kept. The player's client snaps to it like any server
 ---correction. Errors on non-finite coordinates.
@@ -30,6 +32,7 @@ function Player:get_pos() end
 function Player:set_pos(x, y, z) end
 
 ---@vb context runtime
+---@vb since 0.1.3
 ---Server pack VM only. The feet position this player was granted when they
 ---joined (where the default respawn puts them).
 ---```lua
@@ -40,6 +43,7 @@ function Player:set_pos(x, y, z) end
 function Player:get_spawn_pos() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Adds to the player's velocity (m/s).
 ---```lua
 ---player:set_velocity(0, 8, 0) -- launch upward
@@ -50,6 +54,7 @@ function Player:get_spawn_pos() end
 function Player:set_velocity(x, y, z) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Logged no-op (nothing to remove a player from).
 ---```lua
 ---player:remove()
@@ -57,6 +62,7 @@ function Player:set_velocity(x, y, z) end
 function Player:remove() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Inventory as a list of `{item=, count=}` (1-based slots).
 ---```lua
 ---for slot, stack in ipairs(player:get_inventory()) do print(slot, stack.item, stack.count) end
@@ -65,6 +71,7 @@ function Player:remove() end
 function Player:get_inventory() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Sends a private chat line.
 ---```lua
 ---player:send_message("welcome!")
@@ -73,6 +80,7 @@ function Player:get_inventory() end
 function Player:send_message(text) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Opens a client UI screen defined with `ui.define`.
 ---```lua
 ---player:open_ui("mypack:shop", { gold = 12 })
@@ -82,6 +90,7 @@ function Player:send_message(text) end
 function Player:open_ui(name, ctx) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Adds items to the inventory.
 ---```lua
 ---player:give{ item = vb.register_block{ name = "mypack:gem" }, count = 3 }
@@ -90,6 +99,7 @@ function Player:open_ui(name, ctx) end
 function Player:give(stack) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Removes `count` of `item` across slots, all-or-nothing.
 ---```lua
 ---if player:take{ item = 4, count = 2 } then player:send_message("paid") end
@@ -99,6 +109,7 @@ function Player:give(stack) end
 function Player:take(stack) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. In-game name.
 ---```lua
 ---print(player:get_name())
@@ -107,6 +118,7 @@ function Player:take(stack) end
 function Player:get_name() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Verified login (frozen table), or `nil` when the server does not authenticate.
 ---```lua
 ---local login = player:get_login()
@@ -116,6 +128,7 @@ function Player:get_name() end
 function Player:get_login() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Reduces health; `cause` is passed to `player_death` handlers.
 ---```lua
 ---player:damage(2, "lava")
@@ -125,6 +138,7 @@ function Player:get_login() end
 function Player:damage(amount, cause) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Current and maximum health, or `nil` if the player is gone.
 ---```lua
 ---local h = player:get_health(); print(h.current, h.max)
@@ -133,6 +147,7 @@ function Player:damage(amount, cause) end
 function Player:get_health() end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any
 ---`EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every
 ---client in range sees it within a tick or two, including clients that come into range later and the player's own
@@ -148,6 +163,7 @@ function Player:get_health() end
 function Player:set_visual_override(override) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 ---```lua
 ---local h = player:get_hunger()
@@ -156,6 +172,7 @@ function Player:set_visual_override(override) end
 function Player:get_hunger() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to `[0, max]`.
 ---```lua
 ---player:add_hunger(5) -- ate food
@@ -164,6 +181,25 @@ function Player:get_hunger() end
 function Player:add_hunger(amount) end
 
 ---@vb context runtime
+---@vb since 0.1.8
+---Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+---```lua
+---player:set_armor(0.25) -- takes 25% less punch damage
+---```
+---@param fraction number
+function Player:set_armor(fraction) end
+
+---@vb context runtime
+---@vb since 0.1.8
+---Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
+---```lua
+---local armor = player:get_armor() or 0
+---```
+---@return number|nil
+function Player:get_armor() end
+
+---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
 ---```lua
 ---local ok = player:break_block(10, 64, 10)
@@ -175,6 +211,7 @@ function Player:add_hunger(amount) end
 function Player:break_block(x, y, z) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Places `block` through the validated pipeline.
 ---```lua
 ---player:place_block(10, 65, 10, 3)
@@ -197,6 +234,7 @@ function Player:place_block(x, y, z, block) end
 ---@field broken boolean
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Throws one punch along the player's look direction (players or blocks, whichever is closer).
 ---```lua
 ---local r = player:punch(2) -- counts as 2 punches against max_damage
@@ -207,6 +245,7 @@ function Player:place_block(x, y, z, block) end
 function Player:punch(block_damage) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. 1-based selected hotbar slot.
 ---```lua
 ---local slot = player:get_selected_slot()
@@ -215,6 +254,7 @@ function Player:punch(block_damage) end
 function Player:get_selected_slot() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. The stack in the selected slot, or `nil` if empty.
 ---```lua
 ---local held = player:get_held_item()
@@ -226,9 +266,11 @@ function Player:get_held_item() end
 ---Server pack VM only. `self` in `vb.register_entity` callbacks: a table (free for your own fields)
 ---whose metatable provides these methods.
 ---@class Entity
+---@field [string] any Your own per-instance fields (`self.hp = 10`).
 local Entity = {}
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Current position.
 ---```lua
 ---local p = self:get_pos()
@@ -237,6 +279,7 @@ local Entity = {}
 function Entity:get_pos() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Teleports the entity.
 ---```lua
 ---self:set_pos(0, 70, 0)
@@ -247,6 +290,7 @@ function Entity:get_pos() end
 function Entity:set_pos(x, y, z) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Registered kind name.
 ---```lua
 ---print(self:get_kind())
@@ -255,6 +299,7 @@ function Entity:set_pos(x, y, z) end
 function Entity:get_kind() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Reduces health (needs `health` in the kind's def); despawns at 0.
 ---```lua
 ---self:damage(3, "fire")
@@ -264,6 +309,7 @@ function Entity:get_kind() end
 function Entity:damage(amount, cause) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Despawns the entity.
 ---```lua
 ---self:remove("expired")
@@ -272,6 +318,7 @@ function Entity:damage(amount, cause) end
 function Entity:remove(cause) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Current and maximum health, or `nil` for a kind without `health`.
 ---```lua
 ---local h = self:get_health()
@@ -280,6 +327,7 @@ function Entity:remove(cause) end
 function Entity:get_health() end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Sets health (clamped; reaching 0 despawns).
 ---```lua
 ---self:set_health(5)
@@ -288,6 +336,7 @@ function Entity:get_health() end
 function Entity:set_health(value) end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Sets, changes or removes the entity's world-space label; replicated as a small update, the entity is not respawned.
 ---A string changes only the text and keeps the current style. A table applies the kind's `text` style with its own fields on top
 ---(an omitted `value` keeps the current text). `nil` or `""` removes the label. Text over 64 bytes or a bad colour is an error.
@@ -300,6 +349,7 @@ function Entity:set_health(value) end
 function Entity:set_text(text) end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. The label's current text, or `nil` if the entity has none.
 ---```lua
 ---if self:get_text() == "Ripe!" then return end
@@ -308,6 +358,7 @@ function Entity:set_text(text) end
 function Entity:get_text() end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Forces the animation clip every client plays for this entity (any clip its sheet declares,
 ---e.g. `"open"`), instead of the one picked from its velocity and on-ground state. Sticky and replicated, including to
 ---players who join later; `nil` goes back to the automatic choice.
@@ -324,6 +375,7 @@ function Entity:set_clip(clip) end
 ---@field layer? integer Overrides the visual's `layer` while attached, -8..8 (e.g. 1 to always draw in front of the parent).
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Attaches this entity to another entity or a player: from then on it moves with the parent
 ---(every tick on the server, every frame on clients, so it never trails behind) until `detach()`. If the parent
 ---despawns or leaves, this entity is removed too (`on_death` cause `"parent_removed"`). `set_pos` has no lasting
@@ -337,6 +389,7 @@ function Entity:set_clip(clip) end
 function Entity:attach_to(parent, opts) end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Undoes `attach_to`; the entity stays where it is. No-op when not attached.
 ---```lua
 ---hat:detach()
@@ -344,6 +397,7 @@ function Entity:attach_to(parent, opts) end
 function Entity:detach() end
 
 ---@vb context runtime
+---@vb since 0.1.7
 ---Server pack VM only. Replaces (table) or clears (`nil`) this entity's per-instance visual override at runtime, same
 ---shape as `vb.world.spawn`'s `visual_override`. Replicated; the entity keeps its net id.
 ---```lua

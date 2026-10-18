@@ -14,6 +14,7 @@ Entity:set_visual_override
 Player:add_hunger
 Player:break_block
 Player:damage
+Player:get_armor
 Player:get_health
 Player:get_held_item
 Player:get_hunger
@@ -29,6 +30,7 @@ Player:place_block
 Player:punch
 Player:remove
 Player:send_message
+Player:set_armor
 Player:set_pos
 Player:set_velocity
 Player:set_visual_override
@@ -42,6 +44,7 @@ client.hunger
 client.inventory
 client.mouse_captured
 client.mouse_position
+client.my_appearance
 client.player_name
 client.players
 client.screen_size

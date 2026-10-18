@@ -6,7 +6,7 @@
 
 `vb.action.set_params(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Overrides action tunables (block reach).
 
@@ -22,7 +22,7 @@ vb.action.set_params{ reach = 6 }
 
 `vb.action.get_params() -> ActionParams`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Effective action tunables.
 

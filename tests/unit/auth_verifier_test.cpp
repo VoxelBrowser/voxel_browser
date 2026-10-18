@@ -295,6 +295,8 @@ TEST_CASE("rule 7: subject and player name") {
 	CHECK(sanitize_player_name("\x01\x02").empty());
 	const std::string long_name(40, 'a');
 	CHECK(sanitize_player_name(long_name).size() == 32);
+	// The 32-byte cut must not leave a trailing space (sanitizing is idempotent).
+	CHECK(sanitize_player_name(std::string(31, 'a') + " bcd") == std::string(31, 'a'));
 	const std::string utf8 = std::string(31, 'a') + "\xC3\xA9\xC3\xA9"; // é é
 	const std::string cut = sanitize_player_name(utf8);
 	CHECK(cut.size() == 31);

@@ -150,12 +150,18 @@ TEST_CASE("handshake structs round-trip") {
 	info.third_person_allowed = false;
 	CHECK_FALSE(round_trip(info).third_person_allowed);
 
-	S2CJoinAccept accept{ vb::core::NetId{ 7 }, { 1.5, 64.25, -3.0 }, 0xABCDEF, 1200 };
+	S2CJoinAccept accept{ vb::core::NetId{ 7 }, { 1.5, 64.25, -3.0 }, 0xABCDEF, 1200, "alex#2" };
 	auto a2 = round_trip(accept);
+	CHECK(a2.your_name == "alex#2");
 	CHECK(a2.your_net_id == vb::core::NetId{ 7 });
 	CHECK(a2.spawn_pos.y == doctest::Approx(64.25));
 	CHECK(a2.world_seed == 0xABCDEF);
 	CHECK(a2.time_of_day == 1200);
+
+	accept.your_name = std::string(vb::protocol::kMaxJoinNameBytes + 1, 'n');
+	std::vector<std::byte> long_name;
+	accept.encode(long_name);
+	CHECK_FALSE(S2CJoinAccept::decode(as_span(long_name)));
 
 	auto d2 = round_trip(S2CDisconnect{ DisconnectReason::kServerFull, "full" });
 	CHECK(d2.reason == DisconnectReason::kServerFull);

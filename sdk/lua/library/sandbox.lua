@@ -9,3 +9,9 @@
 --   debug.* except debug.traceback
 
 ---@diagnostic disable: lowercase-global
+
+---The engine's `require`: loads one of the pack's own `.lua` files (dots are directories) once and
+---returns its result; nothing outside the pack can be loaded.
+---@param modname string e.g. `"structures.oak_tree"` for `structures/oak_tree.lua`.
+---@return any
+function require(modname) end

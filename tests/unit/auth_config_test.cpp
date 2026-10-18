@@ -114,6 +114,7 @@ TEST_CASE("auth.lua: the firebase preset derives issuer and audience from projec
 		return {
 			provider = "firebase", project_id = "my-game-1234", api_key = "AIzaSyExample",
 			sign_in = { "password", "google" }, claims = { "email" },
+			google_client_id = "123-abc.apps.googleusercontent.com", google_client_secret = "GOCSPX-x",
 		})");
 	REQUIRE(r.config.has_value());
 	const auto &c = *r.config;
@@ -122,6 +123,8 @@ TEST_CASE("auth.lua: the firebase preset derives issuer and audience from projec
 	CHECK(c.client_id == "my-game-1234");
 	CHECK(c.name_claim == "name");
 	CHECK(c.sign_in == std::vector<FirebaseSignIn>{ FirebaseSignIn::kPassword, FirebaseSignIn::kGoogle });
+	CHECK(c.google_client_id == "123-abc.apps.googleusercontent.com");
+	CHECK(c.google_client_secret == "GOCSPX-x");
 	CHECK(vb::auth::describe(c).find("AIzaSyExample") == std::string::npos); // redacted
 }
 
@@ -199,6 +202,14 @@ TEST_CASE("auth.lua: type and range validation") {
 	check_rejected("return { " + base + "'positional' }", "keys must be strings");
 	check_rejected("return { provider='firebase', project_id='p', api_key='k', sign_in={'sms'} }",
 			"sign_in");
+	// "google" needs the Desktop-app OAuth client it signs in to Google with.
+	check_rejected("return { provider='firebase', project_id='p', api_key='k', sign_in={'google'} }",
+			"google_client_id");
+	check_rejected("return { provider='firebase', project_id='p', api_key='k', google_client_secret='s' }",
+			"google_client_secret");
+	check_rejected("return { provider='keycloak', issuer='https://id.example/realms/x', client_id='c', "
+				   "google_client_id='g' }",
+			"google_client_id");
 	check_rejected("return { provider='firebase', project_id='p q', api_key='k' }", "invalid characters");
 
 	// reauth_interval_seconds = 0 is the documented "disabled" value.

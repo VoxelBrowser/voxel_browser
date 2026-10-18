@@ -107,6 +107,8 @@ return {
 	project_id   = "my-game-1234",
 	api_key      = "AIza...",                   -- Firebase web API key (public by design)
 	sign_in      = { "password", "google" },    -- engine-drawn form / browser flow
+	google_client_id     = "1234-abc.apps.googleusercontent.com", -- "google": a Desktop-app OAuth client
+	google_client_secret = "GOCSPX-...",        -- Google requires it for Desktop apps; not confidential
 	name_claim   = "name",
 	claims       = { "email", "email_verified" },
 }
@@ -335,7 +337,11 @@ A pack that needs a field asks for it by adding the claim to `auth.lua`'s
 `claims` list.
 
 Client UI VM (`ui/*.lua`) gets `state.login = { name, subject }` (read-only,
-own player only) for "Signed in as …" labels. No claims, no tokens.
+own player only) for "Signed in as …" labels. No claims, no tokens. Done
+2026-10-18: `name` comes from `S2C_JoinAccept.your_name` (protocol v33),
+`subject` from the `sub` of the token the client sent
+(`SignInCoordinator::signed_in_subject`); `UiRuntime::set_login` puts it in
+every render's `state`.
 
 ## 7. Client side
 
@@ -352,8 +358,15 @@ own player only) for "Signed in as …" labels. No claims, no tokens.
 - **Firebase password:** engine-drawn email/password form → Identity
   Toolkit REST → ID token. Password never touches the game server.
 - **Session cache:** refresh token per `(server, issuer, client_id)` in
-  `user_config_dir()/auth/<sha256(server|issuer|client_id)>.json`, mode 0600
-  (OS keychain is a later step). `server` is the address the client
+  `user_config_dir()/auth/<sha256(server|issuer|client_id)>.json`, mode 0600.
+  The token itself goes to the OS keychain when there is one
+  (`vb::auth::os_secret_backend()`: macOS Keychain, Windows Credential
+  Manager, Secret Service via a dlopen'ed libsecret; since 2026-10-18), keyed
+  by the hash of the file's absolute path; the file then holds only metadata
+  and `"secret":"os"`. A keychain that is missing, refuses (e.g. a token over
+  the Credential Manager's 2560-byte blob limit) or fails once keeps the token
+  in the file; opening the store moves file tokens into a working keychain.
+  `VB_KEYCHAIN=off` forces files (the e2e harness sets it). `server` is the address the client
   connected to (`host:port`, or `singleplayer`). Each server is its own
   sign-in: two servers on the same identity provider never share a saved
   login (it was per `(issuer, client_id)` until 2026-10-08; such files are
@@ -542,7 +555,7 @@ day, M ≈ 2–3 days, L ≈ a week.
 - [ ] Per-IP auth rate limit; at most one in-flight JWKS refresh; security
       table rows; `docs/auth.md` operator guide (Keycloak client setup:
       public client, PKCE, redirect `http://127.0.0.1/*`; Firebase setup).
-- [ ] Optional: OS keychain storage for refresh tokens.
+- [x] Optional: OS keychain storage for refresh tokens (2026-10-18, see §7).
 - **Exit:** fuzzers run clean for a CI-length budget; operator guide lets a
   new operator stand up Keycloak auth from scratch.
 

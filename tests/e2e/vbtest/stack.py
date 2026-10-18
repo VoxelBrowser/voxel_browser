@@ -121,6 +121,8 @@ class ClientFactory:
             env = dict(os.environ, HOME=str(home_dir), XDG_CACHE_HOME=str(cache), LOCALAPPDATA=str(cache),
                        # saved sign-ins live under the config dir: never the real one, whatever the runner sets
                        XDG_CONFIG_HOME=str(home_dir / "config"), APPDATA=str(home_dir / "config"),
+                       # ...and never the developer's OS keychain either: refresh tokens stay in files
+                       VB_KEYCHAIN="off",
                        # the client's own 10 s connect deadline, stretched like every other wait
                        VB_CONNECT_TIMEOUT_SECONDS=str(int(10 * timeout_scale())))
             argv = [str(self.client_bin)] + ([] if windowed else ["--headless"])

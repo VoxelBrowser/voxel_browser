@@ -75,6 +75,50 @@ SignInResult firebase_password_sign_in(HttpFetcher &http, const std::string &api
 	return r;
 }
 
+SignInResult firebase_idp_sign_in(HttpFetcher &http, const std::string &api_key,
+		const std::string &provider_id, const std::string &idp_id_token) {
+	if (api_key.empty() || idp_id_token.empty()) {
+		return failure("Sign-in failed");
+	}
+	// requestUri only has to be a valid http(s) URL for an id_token post body.
+	const json body = { { "postBody", form_encode({ { "id_token", idp_id_token }, { "providerId", provider_id } }) },
+		{ "requestUri", "http://localhost" }, { "returnSecureToken", true },
+		{ "returnIdpCredential", true } };
+	const HttpResult res = http.post(
+			"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key=" + url_encode(api_key),
+			"application/json", body.dump());
+	if (res.status == 0) {
+		return failure("Could not reach the sign-in service");
+	}
+	if (res.status != 200) {
+		const std::string code = error_message(res.body);
+		if (code.rfind("OPERATION_NOT_ALLOWED", 0) == 0) {
+			return failure("Google sign-in is not enabled for this game");
+		}
+		return failure(firebase_error_text(code));
+	}
+	const json doc = json::parse(res.body, nullptr, false);
+	if (!doc.is_object()) {
+		return failure("Sign-in failed");
+	}
+	// Account-linking conflicts come back as 200 with an error and no token.
+	if (doc.contains("needConfirmation") && doc["needConfirmation"].is_boolean() &&
+			doc["needConfirmation"].get<bool>()) {
+		return failure("This e-mail already has an account with another sign-in method");
+	}
+	if (!doc.contains("idToken") || !doc["idToken"].is_string()) {
+		return failure("Sign-in failed");
+	}
+	SignInResult r;
+	r.done = true;
+	r.ok = true;
+	r.id_token = doc["idToken"].get<std::string>();
+	if (doc.contains("refreshToken") && doc["refreshToken"].is_string()) {
+		r.refresh_token = doc["refreshToken"].get<std::string>();
+	}
+	return r;
+}
+
 SignInResult firebase_refresh(HttpFetcher &http, const std::string &api_key,
 		const std::string &refresh_token) {
 	if (api_key.empty() || refresh_token.empty()) {

@@ -46,12 +46,11 @@ struct Fixture {
 	vb::worldgen::WorldGenWorkerPool pool;
 	vb::net::WorldReplicator replicator;
 
-	explicit Fixture(const std::filesystem::path &storage_path)
-			: rt(net.server(), registry, storage_path),
-			  world(registry),
-			  gen(vb::worldgen::WorldGenParams{}, registry),
-			  pool(gen, vb::worldgen::WorldGenWorkerPool::kSynchronous),
-			  replicator(world, pool, registry, /*view*/ 1, /*vview*/ 1) {
+	explicit Fixture(const std::filesystem::path &storage_path) : rt(net.server(), registry, storage_path),
+																  world(registry),
+																  gen(vb::worldgen::WorldGenParams{}, registry),
+																  pool(gen, vb::worldgen::WorldGenWorkerPool::kSynchronous),
+																  replicator(world, pool, registry, /*view*/ 1, /*vview*/ 1) {
 		rt.attach_world(replicator);
 	}
 };
@@ -202,8 +201,8 @@ TEST_CASE("vb.register_entity{health=} rejects a non-positive value") {
 }
 
 TEST_CASE("vb.register_entity{width=, height=} reaches joining clients as "
-		"S2C_EntityKindRegistry, defaulting to the placeholder's own "
-		"0.8/1.8 when omitted (entity-management follow-up to Phase 6.1)") {
+		  "S2C_EntityKindRegistry, defaulting to the placeholder's own "
+		  "0.8/1.8 when omitted (entity-management follow-up to Phase 6.1)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_kind_registry"));
@@ -229,8 +228,8 @@ TEST_CASE("vb.register_entity{width=, height=} reaches joining clients as "
 }
 
 TEST_CASE("vb.register_entity{visual=} reaches joining clients as "
-		"S2C_EntityKindRegistry.visual, absent for a kind that never sets "
-		"one (entity-management follow-up to the width/height item)") {
+		  "S2C_EntityKindRegistry.visual, absent for a kind that never sets "
+		  "one (entity-management follow-up to the width/height item)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_visual"));
@@ -306,7 +305,7 @@ TEST_CASE("vb.register_entity{visual=} rejects a bad shape") {
 }
 
 TEST_CASE("vb.register_entity{represents=} accepts 'player'/'item_drop', "
-		"rejects an unknown value, and rejects a role claimed twice") {
+		  "rejects an unknown value, and rejects a role claimed twice") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 
@@ -339,7 +338,7 @@ TEST_CASE("vb.register_entity{represents=} accepts 'player'/'item_drop', "
 }
 
 TEST_CASE("install_entity_kind_registry leaves the hook at nullopt when no "
-		"pack ever called vb.register_entity") {
+		  "pack ever called vb.register_entity") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("entity_kind_registry_empty"));
@@ -383,7 +382,7 @@ TEST_CASE("vb.register_keybind is idempotent, capped, and rejected after freeze"
 }
 
 TEST_CASE("vb.physics.set_params overrides only the fields it sets, rejected "
-		"after freeze (Phase 6.7)") {
+		  "after freeze (Phase 6.7)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("physics"));
@@ -406,7 +405,7 @@ TEST_CASE("vb.physics.set_params overrides only the fields it sets, rejected "
 }
 
 TEST_CASE("without a vb.physics.set_params call, effective_move_params "
-		"returns base unchanged (Phase 6.7)") {
+		  "returns base unchanged (Phase 6.7)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("physics_default"));
@@ -422,7 +421,7 @@ TEST_CASE("without a vb.physics.set_params call, effective_move_params "
 }
 
 TEST_CASE("vb.action.set_params overrides reach, rejected after freeze "
-		"(Phase 6.21)") {
+		  "(Phase 6.21)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("action"));
@@ -442,7 +441,7 @@ TEST_CASE("vb.action.set_params overrides reach, rejected after freeze "
 }
 
 TEST_CASE("without a vb.action.set_params call, effective_action_params "
-		"returns the built-in default (Phase 6.21)") {
+		  "returns the built-in default (Phase 6.21)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(
@@ -455,8 +454,8 @@ TEST_CASE("without a vb.action.set_params call, effective_action_params "
 }
 
 TEST_CASE("vb.physics.get_params()/vb.action.get_params() round-trip the "
-		"effective (post-override) values, and report engine defaults with "
-		"no override (Phase 6.21)") {
+		  "effective (post-override) values, and report engine defaults with "
+		  "no override (Phase 6.21)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(
@@ -483,7 +482,7 @@ TEST_CASE("vb.physics.get_params()/vb.action.get_params() round-trip the "
 
 // REMAINING_TASKS.md's hunger gap.
 TEST_CASE("vb.hunger.set_params overrides decay/starvation rates, disabled "
-		"(0/0) with no override, rejected after freeze") {
+		  "(0/0) with no override, rejected after freeze") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("hunger"));
@@ -520,7 +519,7 @@ TEST_CASE("vb.hunger.set_params overrides decay/starvation rates, disabled "
 }
 
 TEST_CASE("vb.config.get exposes the operator's ServerConfig read-only "
-		"(Phase 6.13)") {
+		  "(Phase 6.13)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("config"));
@@ -549,7 +548,7 @@ TEST_CASE("vb.config.get exposes the operator's ServerConfig read-only "
 }
 
 TEST_CASE("vb.config.get returns nil for every key when set_server_config "
-		"was never called (Phase 6.13)") {
+		  "was never called (Phase 6.13)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("config_unset"));
@@ -562,7 +561,7 @@ TEST_CASE("vb.config.get returns nil for every key when set_server_config "
 }
 
 TEST_CASE("vb.worldgen.set_pipeline requires 'height', rejected after "
-		"freeze (Phase 6.14)") {
+		  "freeze (Phase 6.14)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("worldgen_missing_height"));
@@ -579,8 +578,24 @@ TEST_CASE("vb.worldgen.set_pipeline requires 'height', rejected after "
 	CHECK_FALSE(r3);
 }
 
+TEST_CASE("vb.noise.value/cellular take a frequency number or { frequency = n }") {
+	vb::net::LoopbackNetwork net;
+	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
+	vb::script::PackRuntime rt(net.server(), registry, temp_storage("noise_args"));
+	REQUIRE(rt.load_pack_file(R"(
+		assert(vb.noise.value().frequency == 1)
+		assert(vb.noise.value(0.25).frequency == 0.25)
+		assert(vb.noise.value({ frequency = 0.5 }).frequency == 0.5) -- used to be ignored
+		assert(vb.noise.value({}).frequency == 1)
+		assert(vb.noise.cellular({ frequency = 1 / 24 }).frequency == 1 / 24)
+		assert(vb.noise.cellular(2).frequency == 2)
+		assert(not pcall(vb.noise.value, "fast"))
+		assert(not pcall(vb.noise.cellular, { frequency = "high" }))
+	)"));
+}
+
 TEST_CASE("without a vb.worldgen.set_pipeline call, build_worldgen_pipeline "
-		"returns nullptr (Phase 6.14)") {
+		  "returns nullptr (Phase 6.14)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("worldgen_unset"));
@@ -592,7 +607,7 @@ TEST_CASE("without a vb.worldgen.set_pipeline call, build_worldgen_pipeline "
 }
 
 TEST_CASE("vb.worldgen.set_pipeline + vb.register_biome produce a working "
-		"pack-driven pipeline distinct from the fixed default (Phase 6.14)") {
+		  "pack-driven pipeline distinct from the fixed default (Phase 6.14)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("worldgen_pipeline"));
@@ -616,7 +631,7 @@ TEST_CASE("vb.worldgen.set_pipeline + vb.register_biome produce a working "
 		})
 		vb.worldgen.set_pipeline({
 			height = vb.noise.fbm({
-				source = vb.noise.value({ frequency = 1 / 64 }),
+				source = vb.noise.value(1),
 				octaves = 4,
 				frequency = 1 / 64,
 			}),
@@ -668,7 +683,7 @@ TEST_CASE("vb.worldgen.set_pipeline + vb.register_biome produce a working "
 }
 
 TEST_CASE("vb.daynight.set_curve overrides the default gradient, rejected "
-		"after freeze (Phase 6.8)") {
+		  "after freeze (Phase 6.8)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("daynight"));
@@ -699,7 +714,7 @@ TEST_CASE("vb.daynight.set_curve overrides the default gradient, rejected "
 }
 
 TEST_CASE("vb.daynight.set_curve rejects an empty/missing keyframes table "
-		"(Phase 6.8)") {
+		  "(Phase 6.8)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("daynight_empty"));
@@ -709,7 +724,7 @@ TEST_CASE("vb.daynight.set_curve rejects an empty/missing keyframes table "
 }
 
 TEST_CASE("without a vb.daynight.set_curve call, effective_day_night_curve "
-		"returns nullopt (Phase 6.8)") {
+		  "returns nullopt (Phase 6.8)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("daynight_default"));
@@ -719,7 +734,7 @@ TEST_CASE("without a vb.daynight.set_curve call, effective_day_night_curve "
 }
 
 TEST_CASE("vb.daynight.set_day_length overrides the base day length, "
-		"rejected for non-positive values (Phase 6.8)") {
+		  "rejected for non-positive values (Phase 6.8)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("day_length"));
@@ -740,7 +755,7 @@ TEST_CASE("vb.daynight.set_day_length overrides the base day length, "
 }
 
 TEST_CASE("vb.render.set_fog overrides the default fog distance, rejected "
-		"after freeze (Phase 7.2)") {
+		  "after freeze (Phase 7.2)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog"));
@@ -761,7 +776,7 @@ TEST_CASE("vb.render.set_fog overrides the default fog distance, rejected "
 }
 
 TEST_CASE("vb.render.set_fog rejects a missing start/end or end <= start "
-		"(Phase 7.2)") {
+		  "(Phase 7.2)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog_bad"));
@@ -774,7 +789,7 @@ TEST_CASE("vb.render.set_fog rejects a missing start/end or end <= start "
 }
 
 TEST_CASE("without a vb.render.set_fog call, effective_fog_params returns "
-		"nullopt (Phase 7.2)") {
+		  "nullopt (Phase 7.2)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog_default"));
@@ -784,7 +799,7 @@ TEST_CASE("without a vb.render.set_fog call, effective_fog_params returns "
 }
 
 TEST_CASE("vb.render.set_fog's underwater_tint overrides the default "
-		"underwater tint (Phase 7.5)") {
+		  "underwater tint (Phase 7.5)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog_tint"));
@@ -807,7 +822,7 @@ TEST_CASE("vb.render.set_fog's underwater_tint overrides the default "
 }
 
 TEST_CASE("vb.render.set_fog without underwater_tint leaves it unset "
-		"(Phase 7.5)") {
+		  "(Phase 7.5)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog_no_tint"));
@@ -821,7 +836,7 @@ TEST_CASE("vb.render.set_fog without underwater_tint leaves it unset "
 }
 
 TEST_CASE("vb.render.set_fog rejects a malformed underwater_tint "
-		"(Phase 7.5)") {
+		  "(Phase 7.5)") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("fog_tint_bad"));
@@ -1101,7 +1116,7 @@ TEST_CASE("vb.storage persists across PackRuntime instances") {
 }
 
 TEST_CASE("storage_revision() bumps on explicit flush_storage() and on "
-		"dispatch_tick()'s own implicit auto-flush, not on a no-op tick") {
+		  "dispatch_tick()'s own implicit auto-flush, not on a no-op tick") {
 	const auto storage = temp_storage("storage_revision");
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
@@ -1130,7 +1145,7 @@ TEST_CASE("storage_revision() bumps on explicit flush_storage() and on "
 }
 
 TEST_CASE("vb.db persists across PackRuntime instances, unlike vb.storage "
-		"it's keyed per-script-chosen-string") {
+		  "it's keyed per-script-chosen-string") {
 	const auto storage = temp_storage("db_persist");
 	{
 		vb::net::LoopbackNetwork net;
@@ -1173,7 +1188,7 @@ TEST_CASE("vb.crypto.hash is deterministic and content-sensitive") {
 }
 
 TEST_CASE("player_leave dispatch without an attached session doesn't crash "
-		"a send_message call") {
+		  "a send_message call") {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();
 	vb::script::PackRuntime rt(net.server(), registry, temp_storage("leave_nosession"));
@@ -1188,7 +1203,7 @@ TEST_CASE("player_leave dispatch without an attached session doesn't crash "
 }
 
 TEST_CASE("a busy-looping tick handler hits the instruction budget instead "
-		"of hanging") {
+		  "of hanging") {
 	vb::script::VmLimits limits;
 	limits.instruction_budget = 200'000;
 	vb::net::LoopbackNetwork net;

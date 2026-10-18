@@ -7,7 +7,8 @@
 > and E5 (`--net-sim`, windowed clients with menu commands and screenshots, typed
 > chat, trace viewer) and E6 (TCP attach, session recorder) are implemented
 > (contract: `docs/automation-protocol.md`; how to write tests: `tests/e2e/README.md`).
-> Everything is landed; the CI job and Windows/macOS have never been run. Covers a
+> Everything is landed; the Linux CI job runs green on every PR (first confirmed green
+> 2026-10-17, run 39044682584). Windows/macOS: see §10 item 19. Covers a
 > Playwright-style harness that drives real `voxel_browser` clients against a
 > real `voxel_browser_server` in multiplayer, so gameplay can be tested by
 > scripts instead of by hand. Complements spec §17 (Testing Strategy); the
@@ -572,9 +573,9 @@ without any automation and remove the duplicated headless loop.
     Fixed; the new `e2e` job is the first to build it. Pre-existing files (`client_app.cpp`
     etc.) have clang-format violations under clang-format 18 that predate this work and were
     left alone.
-19. **Not verified: the CI job itself.** `e2e` in `build_linux.yml` (ASan + UBSan, 3x
-    timeouts) has never run on a runner; LeakSanitizer or ASan may report things in the
-    child processes that the local, un-sanitized runs can't show. Expect a first-run fix-up.
+19. **The CI job runs on Linux only.** `e2e` in `build_linux.yml` (ASan + UBSan, 3x
+    timeouts) is green on PRs (confirmed 2026-10-17, run 39044682584). Windows and macOS
+    do not run the e2e suite.
 
 20. **raylib batches draw calls until `EndDrawing()` (found in E5).** A screenshot read
     before that returns only the clear colour (menu "blank" at 18,18,22). The capture

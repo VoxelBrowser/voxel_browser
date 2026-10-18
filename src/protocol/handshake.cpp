@@ -194,6 +194,7 @@ void S2CJoinAccept::encode(std::vector<std::byte> &out) const {
 	w.f64(spawn_pos.z);
 	w.u64(world_seed);
 	w.u32(time_of_day);
+	w.string(your_name);
 }
 
 Decoded<S2CJoinAccept> S2CJoinAccept::decode(std::span<const std::byte> in) {
@@ -205,6 +206,7 @@ Decoded<S2CJoinAccept> S2CJoinAccept::decode(std::span<const std::byte> in) {
 	m.spawn_pos.z = r.f64();
 	m.world_seed = r.u64();
 	m.time_of_day = r.u32();
+	m.your_name = r.string(kMaxJoinNameBytes);
 	return finish(r, std::move(m));
 }
 

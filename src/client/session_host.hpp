@@ -167,9 +167,11 @@ inline bool kSingleplayerIgnoreEngineReq = false;
 
 // `auth_out` is set iff the pack declares a valid auth.lua (and auth is not
 // skipped): singleplayer then runs the real sign-in, same as a dedicated server.
+// `refused` is set when the pack must not be played at all (its engine_version_req
+// does not admit this build): the client shows it on the menu's error screen.
 inline vb::script::PackRuntime make_singleplayer_pack_runtime(
 		vb::net::Transport &transport, vb::world::BlockRegistry &registry,
-		std::optional<vb::auth::AuthConfig> &auth_out) {
+		std::optional<vb::auth::AuthConfig> &auth_out, std::string &refused) {
 	vb::script::PackRuntime rt(transport, registry,
 			std::filesystem::path(kSingleplayerContentPack) / "storage.json");
 	// A pack that declares auth.lua makes authentication mandatory
@@ -177,8 +179,8 @@ inline vb::script::PackRuntime make_singleplayer_pack_runtime(
 	// build without the verifier, falls back to the hardcoded base set exactly
 	// like a pack that failed to load, never to an unauthenticated pack.
 	bool pack_blocked = false;
-	// pack.toml's engine_version_req is enforced here too (dev-experience.md §3.7): a pack
-	// that needs a newer engine falls back to the base set, like any other blocked pack.
+	// pack.toml's engine_version_req is enforced here too (dev-experience.md §3.7), like the
+	// dedicated server's refusal: singleplayer does not start, and the menu says why.
 	{
 		const vb::core::EngineReqCheck req = vb::script::check_pack_engine_req(
 				vb::script::read_pack_manifest(kSingleplayerContentPack), vb::core::engine_version());
@@ -186,8 +188,9 @@ inline vb::script::PackRuntime make_singleplayer_pack_runtime(
 			std::cerr << "client: *** --ignore-engine-req: " << req.message
 					  << " (continuing; development only) ***\n";
 		} else if (!req.ok) {
-			std::cerr << "client: singleplayer content pack '" << kSingleplayerContentPack << "': " << req.message
-					  << " -- running with the hardcoded base block set only\n";
+			refused = "Can't start singleplayer: " + req.message +
+					". Install a matching version (vb install / vb use) or pick another pack.";
+			std::cerr << "client: " << refused << '\n';
 			pack_blocked = true;
 		}
 	}
@@ -378,6 +381,7 @@ struct Singleplayer {
 	// declared before pack_runtime/server so their initializers can read it.
 	std::optional<vb::auth::AuthConfig> auth_config;
 	std::shared_ptr<void> auth_service; // AuthService, outlives `server`'s use of it
+	std::string pack_refused; // see make_singleplayer_pack_runtime; becomes world_error
 	vb::script::PackRuntime pack_runtime;
 	// Phase 6.7: no ServerConfig/server.toml on this in-process path, so the
 	// engine default (vb::physics::MoveParams{}) is the base a pack's
@@ -404,7 +408,7 @@ struct Singleplayer {
 	vb::net::ServerSession server;
 	std::optional<vb::net::ClientSession> client_session;
 
-	Singleplayer(std::uint64_t seed, const std::string &name, int view_distance) : pack_runtime(make_singleplayer_pack_runtime(net.server(), registry, auth_config)),
+	Singleplayer(std::uint64_t seed, const std::string &name, int view_distance) : pack_runtime(make_singleplayer_pack_runtime(net.server(), registry, auth_config, pack_refused)),
 																				   move_params(pack_runtime.effective_move_params(vb::physics::MoveParams{})),
 																				   world(registry),
 																				   generator(make_generator(seed, registry,
@@ -443,7 +447,9 @@ struct Singleplayer {
 		const auto pack_info = vb::script::read_pack_manifest(kSingleplayerContentPack);
 		const auto check = vb::world::check_world_registry(kSingleplayerWorldDir, registry,
 				pack_info.name.empty() ? kSingleplayerContentPack : pack_info.name);
-		if (!check.ok) {
+		if (!pack_refused.empty()) {
+			world_error = pack_refused; // the pack itself can't run here; nothing to save
+		} else if (!check.ok) {
 			world_error = check.message;
 		} else {
 			if (!check.message.empty()) {

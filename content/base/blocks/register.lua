@@ -19,7 +19,15 @@ for _, def in ipairs(require("data.blocks")) do
 				BLOCK_IDS[def.drops or def.name], 1)
 		end
 	end
-	local id = vb.register_block(def)
+	-- `drops` is this pack's own key (see above), not a BlockDef field: keep it out of the
+	-- engine's table (`vb pack check` warns about keys the engine would ignore).
+	local block = {}
+	for k, v in pairs(def) do
+		if k ~= "drops" then
+			block[k] = v
+		end
+	end
+	local id = vb.register_block(block)
 	BLOCK_IDS[def.name] = id
 	-- "base:wood" -> base_wood_id: plain globals, shared by every pack file
 	-- (one Lua state), for crafting.lua and others that need an id at load time.

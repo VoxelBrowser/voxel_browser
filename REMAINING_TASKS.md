@@ -59,7 +59,7 @@ Full detail: `remaining_tasks/phase1.md`.
       confirmed 2026-09-28); two-client replication re-run over
       `GnsTransport` (2026-09-28).
 - [x] macOS CI builds `VB_WITH_NET` (2026-09-30, `build_net_deps` job in
-      `build_macos.yml`) — **not yet verified by a real Actions run**.
+      `build_macos.yml`); green on a real Actions run (2026-10-17, run 39044682584).
 
 ---
 
@@ -118,8 +118,8 @@ Full detail: `remaining_tasks/phase4.md`.
       (spawn-time only — no live update/clear path), real base-pack art, the
       texture atlas, manifest staleness fix (not for `--singleplayer`), and the
       `icon` item-grid widget.
-- [ ] Follow-up: full base-pack reskin (dirt/grass/sand/wood/leaves) — only
-      `base:stone`/`base:water` use real textures so far.
+- [x] Full base-pack reskin (2026-10-17): dirt/grass/sand/wood/planks/leaves/
+      sticks now have 16x16 textures (`scripts/gen_base_textures.py`).
 
 ---
 
@@ -143,7 +143,7 @@ Full detail: `remaining_tasks/phase5.md`.
 
 ---
 
-## Phase 6 — Lua-Driven Extensibility ✅ 6.1–6.16, 6.18, 6.20–6.21 done; 6.17 superseded
+## Phase 6 — Lua-Driven Extensibility ✅ all done; 6.17 superseded
 
 Goal: content packs override/extend engine defaults the way block
 registration already does — biomes, entities, UI, input, data. Landed:
@@ -178,13 +178,14 @@ Full detail: `remaining_tasks/phase6.md`.
       `entity:set_clip`, `entity:attach_to`/`detach`, sprite `layer`/
       `through_walls`, alpha-cutout + back-to-front entity drawing
       (all `S2C_EntityProps`, protocol 32).
-- [ ] Still open: no swing animation, no PvP armor/knockback.
+- [x] Swing animation (`PunchParams::swing_clip`, base pack plays `swing`),
+      PvP armor (`player:set_armor`) and knockback (`vb.combat.set_params`
+      `knockback_speed`/`knockback_lift`) -- 2026-10-17.
 - [x] Paper-doll appearance (protocol 32): visual `layers` (below/rows/
       tint), `player:`/`entity:set_visual_override` at runtime, own outfit
       via the F5 third-person camera (`vb.render.set_third_person`).
-- [ ] UI `sprite` widget (wardrobe/preview screens) and a
-      `client.my_appearance()` UI binding -- the client side already has
-      `ClientSession::my_visual_override()`.
+- [x] UI `sprite` widget (texture + optional `src` crop + tint) and
+      `client.my_appearance()` -- 2026-10-17. No protocol change.
 
 ---
 
@@ -232,9 +233,10 @@ surface and per-phase task lists: `architecture_spec/dev-cli.md` §11.
       `install.sh`; **inactive until the maintainer adds a key to
       `release_keys.txt` and the `RELEASE_SIGNING_KEY` secret** — steps in
       `architecture_spec/dev-cli.md`), `vb server service print`,
-      `vb launch --connect` protocol warning. arm64: `vb`/scripts understand
-      `linux-arm64`/`windows-arm64`, but the **CI legs are not added yet**
-      (how-to in the design doc).
+      `vb launch --connect` protocol warning. arm64: `linux-arm64` ships (CI leg
+      green, 2026-10-17; `vb install` on real hardware untested).
+      `windows-arm64` builds but the real-UDP `GnsTransport` tests fail, so
+      its CI leg is removed -- see `architecture_spec/dev-cli.md` (arm64).
 
 ---
 
@@ -253,12 +255,34 @@ Full detail: `remaining_tasks/phase9.md`.
       password), re-auth / revocation + `SessionStore`, singleplayer / `vb` /
       e2e, hardening (per-IP sign-in rate limit), mock-Keycloak testing
       checked against real Keycloak 26.7.5.
-- [ ] Still open from 9.x: libFuzzer targets (a deterministic mutation test
-      stands in); OS keychain for refresh tokens (0600 files today); Firebase
-      `google` sign-in (needs a Google OAuth client id key in `auth.lua`);
-      `state.login` in the client UI VM; first-use trust prompt at e2e level;
-      manual sign-in runs and builds on Windows/macOS (socket/ShellExecute
-      code is unbuilt).
+- [x] libFuzzer targets (2026-10-18): `tests/fuzz/` `fuzz_protocol` (every
+      wire decoder, frames, chunk codec, LZ4) and `fuzz_auth` (ID tokens,
+      JWKS, loopback redirect, player names); ctest replay on every leg, CI
+      `fuzz` job. Found and fixed: a wrapping run-length check in
+      `rle_decode`/`decode_chunk_payload` (a server could crash clients) and a
+      trailing space left by `sanitize_player_name`'s 32-byte cut.
+- [x] OS keychain for refresh tokens (2026-10-18): `vb::auth::os_secret_backend()`
+      (macOS Keychain, Windows Credential Manager, libsecret via dlopen), file
+      fallback, file tokens migrate in; real-keychain test on the macOS/Windows
+      legs and against gnome-keyring on Linux debug x86_64.
+- [x] Firebase `google` sign-in (2026-10-18): `auth.lua` `google_client_id`/
+      `google_client_secret` (a Google "Desktop app" client), browser flow
+      against Google then `accounts:signInWithIdp`; "Sign in with Google" on
+      the sign-in screen. Unit-tested with a fake Google over a real loopback
+      socket; not run against real Google.
+- [x] `state.login` in the client UI VM (2026-10-18): read-only `{ name,
+      subject }` in every screen/HUD `state`; `S2C_JoinAccept.your_name`
+      (protocol 33) so the client knows its server-given name (also used for
+      `client.player_name()`); base `pause.lua` shows "Signed in as …".
+- [x] First-use trust prompt at e2e level (2026-10-18): `signin.trust|browser|cancel`
+      automation commands click the windowed sign-in screen's buttons;
+      `test_first_use_trust_prompt_asks_before_contacting_the_idp` checks nothing
+      reaches the IdP before Continue and that a second client is not asked again.
+- [x] Sign-in code builds on Windows/macOS: `VB_WITH_AUTH` defaults ON, so
+      both CI legs compile it (green since 2026-10-17); since 2026-10-18 the
+      loopback browser-flow unit tests run on Windows too (Winsock helper).
+- [ ] Still open from 9.x (manual): sign-in runs against real Keycloak/Firebase/
+      Google on Windows/macOS.
 
 ---
 
@@ -300,14 +324,28 @@ layout, command surface and per-phase task lists:
 
 Follow-ups:
 
-- [ ] LuaLS `--check` job in CI (pin a LuaLS release; zero warnings in `sdk/lua`), and try a nested
-      `ui/.luarc.json` for real per-environment editor warnings.
-- [ ] `--check-pack` warnings: block without a texture, unknown keys in `def` tables; `since`-aware
-      "API newer than your `engine_version_req`" warning (§3.7 "Later").
-- [ ] Singleplayer should show an `engine_version_req` mismatch in the main menu (today: stderr + base set).
-- [ ] `vb.noise.value{frequency=...}` ignores a table argument (the binding takes a number, so
-      `content/examples/kitchen_sink` silently gets the default); make it accept both or fix the example.
-- [ ] `vb pack dev` is untested end to end (needs a real server + client); only argument handling is covered.
+- [x] LuaLS `--check` job in CI (2026-10-18): `scripts/luals_check.sh` pins LuaLS 3.18.2 and
+      gates on zero warnings in `sdk/lua`, both shipped packs and the `vb pack init` templates.
+      Nested `ui/.luarc.json` (UI-only stubs: `vb` in `ui/` is flagged) in both packs and written
+      by `vb pack init/types`. Fixing it to zero corrected wrong stubs: block `on_break`/`on_place`
+      take a `ctx {pos, player}`, entity `on_hit(self, amount, cause)`, `PlayerInput.dt`,
+      `fall_gravity_scale`, open `Entity` fields, the sandboxed `require`.
+- [x] `--check-pack` warnings (2026-10-18): unknown keys in `vb.register_*`/`set_pipeline` tables
+      (from the stubs' `---@class` fields), blocks without a texture or with one the pack lacks, and
+      APIs newer than `engine_version_req`'s lower bound (every stub now has `---@vb since`, derived
+      from the release tags; `src/server/check_pack_data.inc` is generated). Fixed what it found:
+      `CraftDef` stub keys (`inputs`/`output`), base's pack-only `drops` key reaching the engine,
+      kitchen_sink's untextured ore.
+- [x] Singleplayer shows an `engine_version_req` mismatch on the menu's error screen and does not start
+      (2026-10-18; it used to run the base block set and only print to stderr). The error screen now
+      wraps long reasons; automation snapshot gains `error_message`; e2e in `test_windowed.py`.
+- [x] `vb.noise.value`/`cellular` accept a number or `{ frequency = n }` (2026-10-18; other types
+      raise). kitchen_sink's fbm sources are now `value(1)` (same terrain as before: the table was
+      ignored, and fbm multiplies the frequency); its standalone cellular layer now really is 1/24.
+- [x] `vb pack dev` end to end (2026-10-18): `tests/e2e/test_pack_dev.py` links the build as a `vb`
+      version, runs `vb pack dev --no-client`, joins its server, saves a new Lua file into the pack and
+      checks a fresh client gets the reloaded pack's greeting. The e2e CI job now builds `vb`
+      (`VB_BUILD_CLI=ON`). Not covered: the client `vb pack dev` opens itself (needs a window).
 
 ---
 
@@ -316,8 +354,8 @@ Follow-ups:
 Full detail: `remaining_tasks/cross_cutting.md`.
 
 - [~] **End-to-end multiplayer automation (dev-only)** — all phases E0–E6
-      landed (design `docs/e2e-automation.md`). Still open: the CI `e2e` job
-      has never run on a runner; Windows/macOS are unbuilt. Must stay
+      landed (design `docs/e2e-automation.md`). The Linux CI `e2e` job is
+      green on PRs (2026-10-17). Still open: Windows/macOS are unbuilt. Must stay
       compiled out of production builds (`VB_WITH_AUTOMATION`,
       `VB_DISTRIBUTION`). Doc-upkeep checklist: `docs/e2e-automation.md` §11.
 - [x] `PlayerHandle` stored across ticks read corrupted data — fixed
@@ -326,8 +364,8 @@ Full detail: `remaining_tasks/cross_cutting.md`.
 - [ ] Keep `ENGINE_PROTOCOL_VERSION` + `docs/protocol.md` in lockstep with every
       wire change.
 - [ ] Every new `vb/protocol` struct gets a round-trip + fuzz test.
-- [x] Sanitizer CI jobs (ASan/UBSan, TSan; Linux only, never verified by a
-      real Actions run), soak test (`soak_test.cpp`), perf budget checks
+- [x] Sanitizer CI jobs (ASan/UBSan, TSan; Linux only, green on real Actions
+      runs since 2026-10-17), soak test (`soak_test.cpp`), perf budget checks
       (`perf_budget_test.cpp`; frame time left out — needs a GL context).
 - [ ] Determinism golden-value CI gate stays green across platforms.
 - [ ] `--headless` stays functional for both binaries (CI + integration tests).

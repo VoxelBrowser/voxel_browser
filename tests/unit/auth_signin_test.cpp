@@ -7,10 +7,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <thread>
 
@@ -21,14 +24,25 @@
 #include "vb/auth/http.hpp"
 #include "vb/auth/jwt.hpp"
 #include "vb/auth/oidc_client.hpp"
+#include "vb/auth/secret_store.hpp"
 #include "vb/auth/session_store.hpp"
 #include "vb/auth/signin.hpp"
+#include "vb/core/paths.hpp"
 #include "vb/core/version.hpp"
 #include "vb/net/handshake.hpp"
 
 #if defined(VB_WITH_AUTH)
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -87,31 +101,43 @@ std::string query_param(const std::string &url, const std::string &key) {
 	return url.substr(pos, end == std::string::npos ? std::string::npos : end - pos);
 }
 
-#if !defined(_WIN32)
 // Plays the browser: one GET to 127.0.0.1:<port><path>; returns the response.
+// Winsock on Windows, so the loopback listener's Windows code runs there too.
 std::string http_get_local(int port, const std::string &path) {
+#if defined(_WIN32)
+	static const bool wsa_ready = [] {
+		WSADATA wsa;
+		return WSAStartup(MAKEWORD(2, 2), &wsa) == 0;
+	}();
+	(void)wsa_ready;
+	const SOCKET fd = ::socket(AF_INET, SOCK_STREAM, 0);
+#else
 	const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+#endif
 	sockaddr_in a{};
 	a.sin_family = AF_INET;
 	a.sin_port = htons(static_cast<std::uint16_t>(port));
 	a.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	std::string out;
-	if (::connect(fd, reinterpret_cast<sockaddr *>(&a), sizeof(a)) == 0) {
+	if (::connect(fd, reinterpret_cast<sockaddr *>(&a), static_cast<int>(sizeof(a))) == 0) {
 		const std::string req = "GET " + path + " HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n";
-		::send(fd, req.data(), req.size(), 0);
+		::send(fd, req.data(), static_cast<int>(req.size()), 0);
 		char buf[1024];
 		for (;;) {
-			const auto n = ::recv(fd, buf, sizeof(buf), 0);
+			const auto n = ::recv(fd, buf, static_cast<int>(sizeof(buf)), 0);
 			if (n <= 0) {
 				break;
 			}
 			out.append(buf, static_cast<std::size_t>(n));
 		}
 	}
+#if defined(_WIN32)
+	::closesocket(fd);
+#else
 	::close(fd);
+#endif
 	return out;
 }
-#endif
 
 } // namespace
 
@@ -195,8 +221,6 @@ TEST_CASE("code exchange sends the verifier; refresh and errors are mapped") {
 	CHECK(bad.error.find("invalid_grant") != std::string::npos);
 	CHECK(bad.error.find("secret detail") == std::string::npos);
 }
-
-#if !defined(_WIN32)
 
 namespace {
 
@@ -317,8 +341,6 @@ TEST_CASE("loopback listener binds 127.0.0.1 on an ephemeral port only") {
 	CHECK(l->redirect_uri() == "http://127.0.0.1:" + std::to_string(l->port()) + "/callback");
 }
 
-#endif // !_WIN32
-
 TEST_CASE("firebase password sign-in: success, mapped errors, no leakage") {
 	struct Fake final : HttpFetcher {
 		HttpResult get(const std::string &) override { return {}; }
@@ -428,20 +450,30 @@ TEST_CASE("token file: trimmed, bounded, re-read every time") {
 	const auto path = std::filesystem::temp_directory_path() / "vb_auth_token_file.txt";
 	std::filesystem::remove(path);
 	CHECK_FALSE(read_token_file(path));
-	{ std::ofstream(path) << "  aaa.bbb.ccc \n"; }
+	{
+		std::ofstream(path) << "  aaa.bbb.ccc \n";
+	}
 	CHECK(read_token_file(path) == "aaa.bbb.ccc");
-	{ std::ofstream(path) << "rotated.token.x"; }
+	{
+		std::ofstream(path) << "rotated.token.x";
+	}
 	CHECK(read_token_file(path) == "rotated.token.x");
-	{ std::ofstream(path) << "   \n"; }
+	{
+		std::ofstream(path) << "   \n";
+	}
 	CHECK_FALSE(read_token_file(path));
-	{ std::ofstream(path) << std::string(20000, 'a'); }
+	{
+		std::ofstream(path) << std::string(20000, 'a');
+	}
 	CHECK_FALSE(read_token_file(path));
 	std::filesystem::remove(path);
 }
 
 TEST_CASE("handshake: a token-file provider signs in on the first poll") {
 	const auto path = std::filesystem::temp_directory_path() / "vb_auth_token_file2.txt";
-	{ std::ofstream(path) << "file.id.token"; }
+	{
+		std::ofstream(path) << "file.id.token";
+	}
 	SignInCoordinator::Options o;
 	o.token_file = path;
 	SignInRig rig(std::move(o));
@@ -513,6 +545,93 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 	std::size_t consumed = 0;
 	auto frame = vb::protocol::read_frame(step.send[0].bytes, consumed);
 	CHECK(vb::protocol::C2SAuth::decode(frame->payload)->token == "FB.TOKEN.1");
+}
+
+// Firebase "google": the browser flow runs against Google with the pack's
+// Desktop-app client (secret included in the code exchange), then the Google
+// ID token is traded for a Firebase one, which is what reaches the server.
+TEST_CASE("coordinator: firebase google sign-in goes through Google, then signInWithIdp") {
+	const std::string google = "https://google.example";
+	struct Idp final : HttpFetcher {
+		std::string google;
+		std::vector<std::pair<std::string, std::string>> posts; // url, body
+		HttpResult get(const std::string &url) override {
+			HttpResult r;
+			if (url == google + "/.well-known/openid-configuration") {
+				r.status = 200;
+				r.body = json{ { "issuer", google }, { "authorization_endpoint", google + "/o/oauth2/v2/auth" },
+					{ "token_endpoint", google + "/token" } }
+								 .dump();
+			}
+			return r;
+		}
+		HttpResult post(const std::string &url, const std::string &, const std::string &body) override {
+			posts.emplace_back(url, body);
+			HttpResult r;
+			r.status = 200;
+			if (url == google + "/token") {
+				r.body = R"({"id_token":"GOOGLE.ID.TOKEN","refresh_token":"google-refresh"})";
+			} else if (url.find("accounts:signInWithIdp?key=k") != std::string::npos &&
+					body.find("id_token=GOOGLE.ID.TOKEN") != std::string::npos &&
+					body.find("providerId=google.com") != std::string::npos) {
+				r.body = R"({"idToken":"FB.FROM.GOOGLE","refreshToken":"fb-refresh"})";
+			} else {
+				r.status = 400;
+				r.body = R"({"error":{"message":"INVALID_IDP_RESPONSE"}})";
+			}
+			return r;
+		}
+	};
+	auto idp = std::make_shared<Idp>();
+	idp->google = google;
+	std::string auth_url;
+	std::thread browser;
+	const auto options = [&] {
+		SignInCoordinator::Options o;
+		o.http = idp;
+		o.google_issuer = google;
+		o.open_browser = [&](const std::string &url) {
+			auth_url = url;
+			const std::string redirect = query_param(url, "redirect_uri");
+			const int port = std::stoi(redirect.substr(redirect.find("%3A", 10) + 3));
+			const std::string state = query_param(url, "state");
+			browser = std::thread([port, state] { http_get_local(port, "/callback?code=G&state=" + state); });
+			return true;
+		};
+		return o;
+	};
+	SignInRig rig(SignInCoordinator::Options{});
+	const auto restart = [&] {
+		rig.coord = std::make_unique<SignInCoordinator>(options());
+		rig.hs = std::make_unique<vb::net::ClientHandshake>(vb::net::HandshakeClientConfig{});
+		rig.hs->set_sign_in_provider(rig.coord->provider());
+		rig.hs->start();
+	};
+
+	// Without a google_client_id param the method is not offered.
+	restart();
+	rig.deliver_challenge("firebase", { { "api_key", "k" }, { "sign_in", "password,google" } });
+	CHECK_FALSE(rig.coord->supports_google());
+
+	restart();
+	rig.deliver_challenge("firebase", { { "api_key", "k" }, { "sign_in", "google" }, { "google_client_id", "gid.apps.googleusercontent.com" }, { "google_client_secret", "gsecret" } });
+	CHECK(rig.coord->supports_google());
+	CHECK_FALSE(rig.coord->supports_browser());
+	CHECK_FALSE(rig.coord->supports_password());
+	rig.coord->start_google();
+	const auto step = rig.poll_for(5000);
+	if (browser.joinable()) {
+		browser.join();
+	}
+	REQUIRE(step.send.size() == 1);
+	std::size_t consumed = 0;
+	auto frame = vb::protocol::read_frame(step.send[0].bytes, consumed);
+	CHECK(vb::protocol::C2SAuth::decode(frame->payload)->token == "FB.FROM.GOOGLE");
+	CHECK(auth_url.rfind(google + "/o/oauth2/v2/auth?", 0) == 0);
+	CHECK(query_param(auth_url, "client_id") == "gid.apps.googleusercontent.com");
+	REQUIRE(idp->posts.size() == 2);
+	CHECK(idp->posts[0].second.find("client_secret=gsecret") != std::string::npos);
+	CHECK(idp->posts[1].first.find("signInWithIdp") != std::string::npos);
 }
 
 TEST_CASE("coordinator: cancel ends the join with 'sign-in cancelled'") {
@@ -610,6 +729,103 @@ TEST_CASE("session store: round trip, owner-only file, sign out, trust list") {
 	std::filesystem::remove_all(dir);
 
 	CHECK(label_from_id_token("not a jwt").empty());
+}
+
+// With a SecretBackend (the OS keychain) the refresh token lives there; the
+// file keeps only metadata. A keychain that refuses the token leaves it in the
+// file, and tokens an older client left in files move into the keychain.
+TEST_CASE("session store: refresh tokens go to the OS keychain when there is one") {
+	const auto dir = fresh_dir("keychain");
+	auto secrets = std::make_shared<MemorySecretBackend>();
+	StoredSession s;
+	s.server = "srv:1";
+	s.issuer = kIssuer;
+	s.client_id = "voxel";
+	s.refresh_token = "R-secret";
+	const auto file_text = [&] {
+		std::string all;
+		for (const auto &e : std::filesystem::directory_iterator(dir)) {
+			std::ifstream in(e.path());
+			all += std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		}
+		return all;
+	};
+	{
+		SessionStore store(dir, secrets);
+		CHECK(store.secrets_name() == "memory");
+		REQUIRE(store.save(s));
+		CHECK(secrets->secrets.size() == 1);
+		CHECK(file_text().find("R-secret") == std::string::npos);
+		REQUIRE(store.load("srv:1", kIssuer, "voxel"));
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-secret");
+		CHECK(store.list().size() == 1);
+	}
+	{
+		// Another config dir never sees this one's keychain entry.
+		const auto other = fresh_dir("keychain_other");
+		SessionStore store(other, secrets);
+		CHECK_FALSE(store.load("srv:1", kIssuer, "voxel"));
+		std::filesystem::remove_all(other);
+	}
+	{
+		// The keychain refuses: the token stays in the (0600) file, and the
+		// stale keychain entry is dropped.
+		secrets->fail = true;
+		SessionStore store(dir, secrets);
+		s.refresh_token = "R-file";
+		REQUIRE(store.save(s));
+		CHECK(file_text().find("R-file") != std::string::npos);
+		secrets->fail = false;
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-file");
+	}
+	{
+		// Opening the store with a working keychain moves the file token there.
+		SessionStore store(dir, secrets);
+		CHECK(file_text().find("R-file") == std::string::npos);
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-file");
+		store.sign_out("srv:1");
+		CHECK(secrets->secrets.empty());
+		CHECK_FALSE(store.load("srv:1", kIssuer, "voxel"));
+	}
+	{
+		// clear() removes keychain entries too.
+		SessionStore store(dir, secrets);
+		REQUIRE(store.save(s));
+		CHECK(secrets->secrets.size() == 1);
+		store.clear();
+		CHECK(secrets->secrets.empty());
+	}
+	std::filesystem::remove_all(dir);
+}
+
+// The real platform keychain. Opt-in (VB_TEST_REAL_KEYCHAIN=1, set by the
+// macOS and Windows CI legs) so a developer's test run never writes to theirs.
+TEST_CASE("session store: the platform keychain round-trips a token") {
+	const auto opt_in = vb::core::get_env("VB_TEST_REAL_KEYCHAIN"); // not getenv: C4996 under MSVC
+	if (opt_in != "1") {
+		return;
+	}
+	auto secrets = os_secret_backend();
+	REQUIRE(secrets);
+	const auto dir = fresh_dir("real_keychain");
+	SessionStore store(dir, secrets);
+	StoredSession s;
+	s.server = "keychain-test:1";
+	s.issuer = kIssuer;
+	s.client_id = "voxel";
+	s.refresh_token = "R-real-" + std::to_string(std::random_device{}());
+	REQUIRE(store.save(s));
+	const auto back = store.load("keychain-test:1", kIssuer, "voxel");
+	REQUIRE(back);
+	CHECK(back->refresh_token == s.refresh_token);
+	for (const auto &e : std::filesystem::directory_iterator(dir)) {
+		std::ifstream in(e.path());
+		const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		CHECK(text.find(s.refresh_token) == std::string::npos); // really in the keychain
+	}
+	store.clear();
+	CHECK_FALSE(store.load("keychain-test:1", kIssuer, "voxel"));
+	std::filesystem::remove_all(dir);
 }
 
 // Saved logins are per server: two servers on the same identity provider

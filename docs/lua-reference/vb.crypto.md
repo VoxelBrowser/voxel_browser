@@ -6,7 +6,7 @@
 
 `vb.crypto.hash(data) -> string`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. SHA-256 hex digest.
 

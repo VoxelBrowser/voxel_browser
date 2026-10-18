@@ -6,7 +6,7 @@
 
 `vb.noise.constant(value) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Constant noise node.
 
@@ -24,31 +24,31 @@ local flat = vb.noise.constant(64)
 
 `vb.noise.value(frequency) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
-Server pack VM only. Value noise.
+Server pack VM only. Value noise. The frequency may also be given as `{ frequency = n }`. Inside `vb.noise.fbm` leave it at 1: the fbm node's own `frequency` multiplies it.
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `frequency?` | `number` | Default 1.0. |
+| `frequency?` | `number|{frequency?:` | number} Default 1.0. |
 
 Returns `NoiseNode`
 
 ```lua
-local n = vb.noise.value(0.01)
+local n = vb.noise.value(0.01) -- same as vb.noise.value{ frequency = 0.01 }
 ```
 
 ## vb.noise.cellular
 
 `vb.noise.cellular(frequency) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
-Server pack VM only. Cellular (Worley) noise.
+Server pack VM only. Cellular (Worley) noise. The frequency may also be given as `{ frequency = n }`.
 
 | Parameter | Type | Description |
 | --- | --- | --- |
-| `frequency?` | `number` | Default 1.0. |
+| `frequency?` | `number|{frequency?:` | number} Default 1.0. |
 
 Returns `NoiseNode`
 
@@ -60,7 +60,7 @@ local cells = vb.noise.cellular(0.02)
 
 `vb.noise.fbm(def) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Fractal Brownian motion over a source node.
 
@@ -78,7 +78,7 @@ local hills = vb.noise.fbm{ source = vb.noise.value(1), frequency = 0.01, octave
 
 `vb.noise.remap(def) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Linearly remaps a node's range.
 
@@ -96,7 +96,7 @@ local height = vb.noise.remap{ source = hills, in_min = -1, in_max = 1, out_min 
 
 `vb.noise.combine(def) -> NoiseNode`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Combines two nodes.
 

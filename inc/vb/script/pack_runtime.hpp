@@ -258,6 +258,10 @@ public:
 	// tell run-time-defined globals (`_G[name] = ...`) from typos.
 	std::vector<std::string> global_names();
 
+	// Tools only (`--check-pack`): runs `code`, a chunk that returns a string, in the pack VM and
+	// gives the string back; nullopt if it fails or returns anything else.
+	std::optional<std::string> eval_string(std::string_view code);
+
 	struct Impl;
 
 private:

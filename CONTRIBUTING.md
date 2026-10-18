@@ -101,6 +101,17 @@ A few things worth knowing that aren't obvious from a single build tree:
   default build's `server_rejects_automation`/`client_rejects_automation`
   CTest entries check that `--automation` is refused. See `docs/e2e-automation.md`; if you implement
   any part of it, finish its §11 documentation checklist in the same change.
+- **Fuzz targets (`tests/fuzz/`)** cover the decoders that parse untrusted
+  bytes: every `vb/protocol` message, frame parsing, the chunk codec and LZ4
+  (`fuzz_protocol`), and ID tokens, JWKS documents, the loopback sign-in
+  request and player names (`fuzz_auth`). Every build runs them as the
+  `fuzz_*` ctest entries (seeds + `tests/fuzz/regressions/` + 20000
+  deterministic mutations). For real coverage-guided fuzzing configure with
+  Clang and `-DVB_BUILD_FUZZERS=ON` (the CI `fuzz` job: 3 minutes per
+  target), then `./fuzz_protocol_replay --write-seeds corpus &&
+  ./fuzz_protocol corpus -max_total_time=300`. A new wire struct goes into
+  `fuzz_protocol.cpp`'s `Messages` list; a crash input goes into
+  `regressions/<target>/` with its fix.
 - **`content_pack_test.cpp`** loads the real `content/base` files (not
   inline Lua strings) — if you edit that pack, this is the test that
   catches a syntax error or a registration-count regression.
@@ -193,11 +204,15 @@ you're adding a new `vb.*`/`ui.*` binding:
   more general primitive plus content-side logic gets you the same result.
 - **Add the stub in the same commit** (`sdk/lua/library/*.lua`, LuaCATS): a
   one-line summary, `---@param`/`---@return` for every argument, a
-  ```` ```lua ```` example, and `---@vb context load|runtime|ui` (usertype
+  ```` ```lua ```` example, `---@vb since <x.y.z>` (the first release that
+  ships it; `--check-pack` warns packs whose `engine_version_req` admits an
+  older engine) and `---@vb context load|runtime|ui` (usertype
   methods as `function Player:name(...) end`, definition tables as
   `---@class` with one `---@field` per key). Then run
   `python3 scripts/gen_lua_docs.py` and commit the regenerated
-  `docs/lua-reference/` and `sdk/lua/api_index.txt`. Two checks keep this
+  `docs/lua-reference/`, `sdk/lua/api_index.txt` and
+  `src/server/check_pack_data.inc` (the `since` versions and every
+  `---@class`'s keys, which `--check-pack` uses). Two checks keep this
   honest: `lua_api_surface_test` (live `vb`/`ui`/`client` tables and usertype
   methods must equal `api_index.txt`; doc examples must compile) and the
   `lua-docs` lint job (`gen_lua_docs.py --check`). A binding that is

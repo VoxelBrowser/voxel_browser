@@ -3,6 +3,8 @@
 
 #include "client_app.hpp"
 
+#include "vb/auth/secret_store.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -135,7 +137,8 @@ void ClientApp::begin_connect(bool as_singleplayer) {
 // the same path, so a pack that declares auth.lua signs in for real there too.
 void ClientApp::install_sign_in(vb::net::ClientSession &session, const std::string &server_id) {
 	if (!auth_store) {
-		auth_store = std::make_shared<vb::auth::SessionStore>(vb::core::user_config_dir() / "auth");
+		auth_store = std::make_shared<vb::auth::SessionStore>(vb::core::user_config_dir() / "auth",
+				vb::auth::os_secret_backend());
 	}
 	vb::auth::SignInCoordinator::Options opts;
 	opts.http = std::shared_ptr<vb::auth::HttpFetcher>(vb::auth::make_curl_fetcher());
@@ -209,12 +212,20 @@ void ClientApp::draw_sign_in() {
 	host = host.substr(0, host.find('/'));
 	view.provider_host = host;
 	view.needs_trust = sign_in->needs_trust();
-	view.offer_browser = sign_in->supports_browser();
+	const bool google = sign_in->supports_google();
+	view.offer_browser = sign_in->supports_browser() || google;
+	view.browser_label = google ? "Sign in with Google" : "Sign in with your browser";
 	view.offer_password = sign_in->supports_password();
 	view.working = sign_in->phase() == Phase::kWorking;
 	const std::string last_error = sign_in->last_error();
 	view.error = last_error;
 	auto ui = menu.draw_signing_in(view);
+#if defined(VB_WITH_AUTOMATION)
+	if (pending_sign_in) { // automation: the click a player would have made
+		ui = std::move(*pending_sign_in);
+		pending_sign_in.reset();
+	}
+#endif
 	if (ui.cancel) {
 		sign_in->cancel();
 		sp.reset(); // before sign_in: its session holds a ticket pointing at it
@@ -225,12 +236,38 @@ void ClientApp::draw_sign_in() {
 	} else if (ui.trust) {
 		sign_in->trust();
 	} else if (ui.browser) {
-		sign_in->start_browser();
+		if (google) {
+			sign_in->start_google();
+		} else {
+			sign_in->start_browser();
+		}
 	} else if (ui.submit_password) {
 		sign_in->start_password(ui.email, ui.password);
 		std::fill(ui.password.begin(), ui.password.end(), '\0');
 	}
 }
+#if defined(VB_WITH_AUTOMATION)
+bool ClientApp::sign_in_choose(std::string_view choice) {
+	using Phase = vb::auth::SignInCoordinator::Phase;
+	if (!render || !sign_in || sign_in->reauth_prompt_active() || sign_in->phase() == Phase::kFinished) {
+		return false; // no sign-in screen (headless signs in by itself; the re-auth banner is separate)
+	}
+	vb::render::MainMenu::SigningInResult r;
+	const bool choosing = sign_in->phase() == Phase::kChoosing && !sign_in->needs_trust();
+	if (choice == "trust" && sign_in->needs_trust()) {
+		r.trust = true;
+	} else if (choice == "browser" && choosing && (sign_in->supports_browser() || sign_in->supports_google())) {
+		r.browser = true;
+	} else if (choice == "cancel") {
+		r.cancel = true;
+	} else {
+		return false;
+	}
+	pending_sign_in = std::move(r);
+	return true;
+}
+#endif
+
 // Periodic re-auth (auth.md §5.6): the silent refresh happens without any UI;
 // only when it fails does this non-blocking banner appear over the running
 // game. The player can ignore it, but the server kicks once its grace runs out.
@@ -262,7 +299,9 @@ void ClientApp::draw_reauth_prompt() {
 	}
 	host = host.substr(0, host.find('/'));
 	view.provider_host = host;
-	view.offer_browser = sign_in->supports_browser();
+	const bool google = sign_in->supports_google();
+	view.offer_browser = sign_in->supports_browser() || google;
+	view.browser_label = google ? "Sign in with Google" : "Sign in with your browser";
 	view.offer_password = sign_in->supports_password();
 	using Phase = vb::auth::SignInCoordinator::Phase;
 	view.working = sign_in->phase() == Phase::kWorking;
@@ -272,7 +311,11 @@ void ClientApp::draw_reauth_prompt() {
 	if (ui.cancel) {
 		reauth_panel_open = false; // only closes the panel; the request stays open
 	} else if (ui.browser) {
-		sign_in->start_browser();
+		if (google) {
+			sign_in->start_google();
+		} else {
+			sign_in->start_browser();
+		}
 	} else if (ui.submit_password) {
 		sign_in->start_password(ui.email, ui.password);
 		std::fill(ui.password.begin(), ui.password.end(), '\0');
@@ -285,7 +328,7 @@ void ClientApp::draw_reauth_prompt() {
 void ClientApp::refresh_signed_in_label() {
 	if (!auth_store) {
 		auth_store = std::make_shared<vb::auth::SessionStore>(
-				vb::core::user_config_dir() / "auth");
+				vb::core::user_config_dir() / "auth", vb::auth::os_secret_backend());
 	}
 	signed_in_server_ = menu.address() + ':' + std::to_string(menu.port());
 	const auto sessions = auth_store->list_for(signed_in_server_);
@@ -456,6 +499,19 @@ void ClientApp::enter_playing() {
 			// texture whenever one shows up (unlike the kind visuals above,
 			// an override's owning entity can spawn at any later time, not
 			// just during this one join-time pass).
+			// `sprite` UI widgets read pack textures from the same place; only
+			// the PNGs, so the (never-needing) scripts aren't copied twice.
+			vb::render::VirtualFs ui_vfs;
+			if (remote) {
+				for (const auto &[path, bytes] : entity_vfs) {
+					if (path.size() > 4 && path.compare(path.size() - 4, 4, ".png") == 0) {
+						ui_vfs.emplace(path, bytes);
+					}
+				}
+			}
+			std::filesystem::path ui_disk_root = remote ? std::filesystem::path{} : std::filesystem::path(kSingleplayerContentPack);
+			ui_renderer.set_pack_source(ui_vfs, ui_disk_root);
+			hud_renderer.set_pack_source(std::move(ui_vfs), std::move(ui_disk_root));
 			entity_renderer->set_virtual_fs(std::move(entity_vfs));
 			if (!remote) {
 				entity_renderer->set_disk_fallback(kSingleplayerContentPack);
@@ -498,6 +554,12 @@ void ClientApp::enter_playing() {
 	// No renderer means nothing to wait on: go straight to playing.
 	state = render ? AppState::kLoading : AppState::kPlaying;
 }
+
+#if defined(VB_WITH_AUTOMATION) && !defined(VB_WITH_AUTH)
+bool ClientApp::sign_in_choose(std::string_view) {
+	return false; // no sign-in screen without VB_WITH_AUTH
+}
+#endif
 
 const char *ClientApp::app_state_name(AppState s) {
 	switch (s) {
@@ -773,7 +835,8 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 			break;
 		}
 		case AppState::kError: {
-			const auto result = menu.draw_error(error_message);
+			const auto result = menu.draw_error(error_message,
+					connecting_singleplayer ? "Could not start singleplayer" : "Could not connect");
 			if (result.back) {
 				state = AppState::kMenu;
 			}
@@ -976,7 +1039,18 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 					(void)id;
 					other_names.push_back(name);
 				}
-				ui_runtime.set_player_list(config.player_name, std::move(other_names));
+				// The server's name for us (v33), which auth or "#2" may have changed.
+				const auto &accept = client->join_accept();
+				const std::string &own = accept && !accept->your_name.empty() ? accept->your_name : config.player_name;
+				ui_runtime.set_player_list(own, std::move(other_names));
+#if defined(VB_WITH_AUTH)
+				const std::string subject = sign_in ? sign_in->signed_in_subject() : std::string();
+				if (!subject.empty()) {
+					ui_runtime.set_login(vb::script::UiRuntime::LoginView{ own, subject });
+				} else {
+					ui_runtime.set_login(std::nullopt);
+				}
+#endif
 			}
 			ui_runtime.set_chat({ chat_log.begin(), chat_log.end() }, chat_open);
 			ui_runtime.set_mouse_captured(mouse_captured);

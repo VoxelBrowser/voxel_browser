@@ -53,6 +53,7 @@ def test_base_pause_screen_opens_from_the_real_escape_keybind(server, clients):
     alice.key_press("pause")
     expect(alice).to_have_ui_open("base:pause")
     expect(alice).to_have_widget("resume")
+    expect(alice).not_.to_have_widget("signed_in")  # no auth.lua: state.login is nil
     alice.ui("resume").click()
     expect(alice).not_.to_have_ui_open("base:pause")
 

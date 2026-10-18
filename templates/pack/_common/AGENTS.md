@@ -10,7 +10,8 @@ the boundary with `player:open_ui(name, ctx)` (server -> client) and `ui.send_ev
 
 1. Edit.
 2. `vb pack check --json` -- exit 0 = clean. Each diagnostic has `severity`, `file`, `line`,
-   `message`. Fix every error; use `--strict` to also fail on warnings.
+   `message`. Fix every error; use `--strict` to also fail on warnings. Warnings include definition
+   keys the engine ignores (typos), blocks without a texture, and APIs newer than `engine_version_req`.
 3. `vb pack dev` (or `vb pack dev --no-client`) -- hosts the pack and restarts when files change.
 
 ## Layout and load order

@@ -115,6 +115,8 @@ public:
 	// The menu is drawn by raygui from raylib's real input state, so these set the same
 	// fields a player would type into and hand kMenu the same result a click would.
 	bool menu_active() const { return state == AppState::kMenu; }
+	// What the error screen says (app_state "error").
+	const std::string &error_text() const { return error_message; }
 	// The name this connection used (what the menu holds), not config.player_name, which only
 	// follows it after a menu-driven connect.
 	const std::string &player_name() const { return menu.player_name(); }
@@ -131,6 +133,11 @@ public:
 		menu.prefill(address, menu.port(), name);
 		pending_menu = vb::render::MainMenu::MainResult{ .singleplayer = true };
 	}
+	// The engine-drawn sign-in screen, same idea: "trust" (Continue on the first-use
+	// prompt), "browser" (Sign in with your browser / with Google) or "cancel". The next
+	// frame's draw_sign_in() acts on it exactly as on the click. False (nothing queued) when
+	// that button is not on screen.
+	bool sign_in_choose(std::string_view choice);
 
 	// Saves the framebuffer to `path` (PNG) at the end of the next frame. Windowed only.
 	enum class Screenshot { kNone,
@@ -287,6 +294,7 @@ private:
 	bool headless_ui_eval = false;
 	std::vector<vb::script::Widget> hud_widget_cache;
 	std::optional<vb::render::MainMenu::MainResult> pending_menu;
+	std::optional<vb::render::MainMenu::SigningInResult> pending_sign_in;
 	Observer *observer = nullptr;
 	std::string screenshot_path_;
 	Screenshot screenshot_state_ = Screenshot::kNone;

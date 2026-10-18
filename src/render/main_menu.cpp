@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 #include <raygui.h>
 #include <raylib.h>
@@ -11,6 +12,33 @@
 namespace vb::render {
 
 namespace {
+
+// Splits `text` into lines no wider than `width` pixels in raygui's current font (breaking at
+// spaces; a single over-long word gets a line of its own).
+std::vector<std::string> wrap_gui_text(std::string_view text, float width) {
+	const Font font = GuiGetFont();
+	const float size = static_cast<float>(GuiGetStyle(DEFAULT, TEXT_SIZE));
+	const float spacing = static_cast<float>(GuiGetStyle(DEFAULT, TEXT_SPACING));
+	std::vector<std::string> lines;
+	std::string line;
+	std::size_t i = 0;
+	while (i < text.size()) {
+		const std::size_t end = std::min(text.find(' ', i), text.size());
+		const std::string word(text.substr(i, end - i));
+		const std::string candidate = line.empty() ? word : line + ' ' + word;
+		if (!line.empty() && MeasureTextEx(font, candidate.c_str(), size, spacing).x > width) {
+			lines.push_back(line);
+			line = word;
+		} else {
+			line = candidate;
+		}
+		i = end + 1;
+	}
+	if (!line.empty()) {
+		lines.push_back(line);
+	}
+	return lines;
+}
 
 constexpr int kTextBufSize = 128;
 
@@ -429,7 +457,7 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 	const float panel_y = std::max(20.0f,
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
 	const std::string title = view.title.empty() ? std::string("Sign in")
-												 : "Sign in — " + std::string(view.title);
+												 : "Sign in - " + std::string(view.title); // ASCII: raylib's default font has no em dash
 	GuiPanel(centered(panel_w, panel_h, panel_y), title.c_str());
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
 	const float w = panel_w - 40.0f;
@@ -458,7 +486,8 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 		y += 30.0f;
 	} else {
 		if (view.offer_browser) {
-			if (GuiButton(Rectangle{ x, y, w, 32.0f }, "Sign in with your browser")) {
+			const std::string label(view.browser_label);
+			if (GuiButton(Rectangle{ x, y, w, 32.0f }, label.c_str())) {
 				result.browser = true;
 			}
 			y += 44.0f;
@@ -493,20 +522,30 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 	return result;
 }
 
-MainMenu::ErrorResult MainMenu::draw_error(std::string_view reason) {
+MainMenu::ErrorResult MainMenu::draw_error(std::string_view reason, std::string_view title) {
 	ErrorResult result;
 	const float panel_w = 460.0f;
-	const float panel_h = 160.0f;
+	// Long reasons (a pack's engine_version_req, auth errors) wrap instead of running off the panel.
+	const float line_h = static_cast<float>(GuiGetStyle(DEFAULT, TEXT_SIZE)) + 6.0f;
+	std::vector<std::string> lines = wrap_gui_text(reason, panel_w - 40.0f);
+	if (lines.size() > 8) {
+		lines.resize(8);
+		lines.back() += " ...";
+	}
+	const float text_h = std::max(48.0f, line_h * static_cast<float>(lines.size()));
+	const float panel_h = 112.0f + text_h;
 	// Same vertical-centering fix as draw_connecting() above, and for the
 	// same reason: a hardcoded y=220 put this panel's bottom (220+160=380)
 	// past the 360px minimum window height too.
 	const float panel_y = std::max(20.0f,
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
-	GuiPanel(centered(panel_w, panel_h, panel_y), "Could not connect");
+	GuiPanel(centered(panel_w, panel_h, panel_y), std::string(title).c_str());
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
-	GuiLabel(Rectangle{ x, panel_y + 50.0f, panel_w - 40.0f, 48.0f },
-			std::string(reason).c_str());
-	if (GuiButton(Rectangle{ x, panel_y + 110.0f, panel_w - 40.0f, 32.0f }, "Back to menu")) {
+	for (std::size_t i = 0; i < lines.size(); ++i) {
+		GuiLabel(Rectangle{ x, panel_y + 50.0f + line_h * static_cast<float>(i), panel_w - 40.0f, line_h },
+				lines[i].c_str());
+	}
+	if (GuiButton(Rectangle{ x, panel_y + 62.0f + text_h, panel_w - 40.0f, 32.0f }, "Back to menu")) {
 		result.back = true;
 	}
 	return result;

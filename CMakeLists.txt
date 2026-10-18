@@ -92,6 +92,17 @@ endif()
 option(VB_ENABLE_ASAN    "Enable AddressSanitizer"                            OFF)
 option(VB_ENABLE_UBSAN   "Enable UndefinedBehaviorSanitizer"                  OFF)
 option(VB_ENABLE_TSAN    "Enable ThreadSanitizer"                             OFF)
+option(VB_BUILD_FUZZERS  "Build the tests/fuzz targets against libFuzzer (Clang only); OFF still builds them as corpus-replay tests" OFF)
+
+if(VB_BUILD_FUZZERS)
+  if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR MSVC)
+    message(FATAL_ERROR "VB_BUILD_FUZZERS needs Clang with libFuzzer (not AppleClang, not MSVC)")
+  endif()
+  # Coverage instrumentation + ASan/UBSan for everything, dependencies included, so the fuzzer
+  # sees edges in the decoders it is fuzzing. Only the fuzz executables link libFuzzer itself.
+  add_compile_options(-fsanitize=fuzzer-no-link,address,undefined -fno-omit-frame-pointer)
+  add_link_options(-fsanitize=address,undefined)
+endif()
 
 # Dependency gates — flipped on per implementation phase.
 option(VB_WITH_NET       "GameNetworkingSockets transport (Phase 1)"          OFF)

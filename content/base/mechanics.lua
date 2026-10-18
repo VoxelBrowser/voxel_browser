@@ -26,6 +26,10 @@
 local was_down = {}
 local was_secondary_down = {}
 
+-- Every swing, hit or whiff, plays base:player's "swing" clip (entities/
+-- player.lua) on the puncher for every client that can see them.
+vb.combat.set_params({ swing_clip = "swing" })
+
 -- REMAINING_TASKS.md 6.20: right-click placing used to be the one remaining
 -- hardcoded block edit -- src/client/main.cpp sent a C2S_BlockEdit{kPlace}
 -- directly off MOUSE_BUTTON_RIGHT with a hardcoded stone block, no pack seam
@@ -69,11 +73,11 @@ vb.on("player_input", function(player, input)
 		-- override (vb.physics.set_params/vb.action.set_params) can never
 		-- silently desync this raycast from the engine's own reach check.
 		local eye_height = vb.physics.get_params().eye_height
-		local reach = vb.action.get_params().reach
+		local reach = vb.action.get_params().reach --[[@as number]]
 		local origin = { x = pos.x, y = pos.y + eye_height, z = pos.z }
 		local held = player:get_held_item()
 		local hit = held and vb.world.raycast(origin, dir, reach)
-		if hit then
+		if held and hit then
 			local placed = player:place_block(
 					hit.x + hit.nx, hit.y + hit.ny, hit.z + hit.nz, held.item)
 			if placed then

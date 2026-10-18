@@ -218,6 +218,20 @@ Status pack_write_types(const Layout &layout, const fs::path &dir, const std::st
 			written->push_back(".luarc.json");
 		}
 	}
+	// ui/ runs in the client UI VM: its own config sees only the ui/client stubs, so an editor
+	// that opens ui/ as a workspace folder flags `vb` there (architecture_spec/dev-experience.md §3.4.1).
+	if (fs::is_directory(dir / "ui", ec) && (overwrite_luarc || !fs::exists(dir / "ui" / ".luarc.json", ec))) {
+		const auto rc = embedded_under("sdk/lua/luarc.ui.template.json");
+		if (rc.empty()) {
+			return { "no ui/.luarc.json template available" };
+		}
+		if (const Status st = write_file(dir / "ui" / ".luarc.json", rc[0].bytes); !st) {
+			return st;
+		}
+		if (written) {
+			written->push_back("ui/.luarc.json");
+		}
+	}
 	return {};
 }
 

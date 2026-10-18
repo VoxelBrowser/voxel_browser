@@ -7,6 +7,7 @@
 vb.noise = {}
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Constant noise node.
 ---```lua
 ---local flat = vb.noise.constant(64)
@@ -16,20 +17,23 @@ vb.noise = {}
 function vb.noise.constant(value) end
 
 ---@vb context load
----Server pack VM only. Value noise.
+---@vb since 0.1.0
+---Server pack VM only. Value noise. The frequency may also be given as `{ frequency = n }`.
+---Inside `vb.noise.fbm` leave it at 1: the fbm node's own `frequency` multiplies it.
 ---```lua
----local n = vb.noise.value(0.01)
+---local n = vb.noise.value(0.01) -- same as vb.noise.value{ frequency = 0.01 }
 ---```
----@param frequency? number Default 1.0.
+---@param frequency? number|{frequency?: number} Default 1.0.
 ---@return NoiseNode
 function vb.noise.value(frequency) end
 
 ---@vb context load
----Server pack VM only. Cellular (Worley) noise.
+---@vb since 0.1.0
+---Server pack VM only. Cellular (Worley) noise. The frequency may also be given as `{ frequency = n }`.
 ---```lua
 ---local cells = vb.noise.cellular(0.02)
 ---```
----@param frequency? number Default 1.0.
+---@param frequency? number|{frequency?: number} Default 1.0.
 ---@return NoiseNode
 function vb.noise.cellular(frequency) end
 
@@ -41,6 +45,7 @@ function vb.noise.cellular(frequency) end
 ---@field gain? number Default 0.5.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Fractal Brownian motion over a source node.
 ---```lua
 ---local hills = vb.noise.fbm{ source = vb.noise.value(1), frequency = 0.01, octaves = 5 }
@@ -57,6 +62,7 @@ function vb.noise.fbm(def) end
 ---@field out_max? number Default 1.
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Linearly remaps a node's range.
 ---```lua
 ---local height = vb.noise.remap{ source = hills, in_min = -1, in_max = 1, out_min = 50, out_max = 90 }
@@ -71,6 +77,7 @@ function vb.noise.remap(def) end
 ---@field op? "add"|"multiply"|"min"|"max" Default "add".
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Combines two nodes.
 ---```lua
 ---local both = vb.noise.combine{ a = hills, b = cells, op = "max" }
@@ -108,6 +115,7 @@ vb.worldgen = {}
 ---@field veins? VeinDef[]
 
 ---@vb context load
+---@vb since 0.1.0
 ---Server pack VM only. Replaces the default terrain with a pack-driven pipeline (compiled once after freeze).
 ---Registered biomes become Voronoi candidates.
 ---```lua

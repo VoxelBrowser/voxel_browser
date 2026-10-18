@@ -132,6 +132,10 @@ std::string sanitize_player_name(std::string_view raw) {
 			--cut;
 		}
 		out.resize(cut);
+		// The cut can land after a space; trim again so the result is stable.
+		while (!out.empty() && out.back() == ' ') {
+			out.pop_back();
+		}
 	}
 	return out;
 }

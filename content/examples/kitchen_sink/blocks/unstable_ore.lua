@@ -16,6 +16,8 @@
 --   1.5/120.0 defaults -- flavor text for "unstable".
 kitchen_sink_unstable_ore_id = vb.register_block({
 	name = "kitchen_sink:unstable_ore",
+	-- Grey rock with glowing specks (16x16, made once with a few lines of Pillow).
+	texture = "textures/unstable_ore.png",
 	solid = true,
 	opaque = true,
 	liquid = false,

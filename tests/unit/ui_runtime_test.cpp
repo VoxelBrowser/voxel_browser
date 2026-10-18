@@ -56,6 +56,36 @@ TEST_CASE("ui.define + open() + render_frame() produces the expected widget list
 	CHECK(&ui.widgets() == &widgets);
 }
 
+// state.login (Phase 9.4/9.5): engine-owned, read-only, nil without auth.
+TEST_CASE("state.login is the signed-in player, read-only, and nil without one") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		seen = {}
+		local function look(where, state)
+			if state.login then
+				local ok = pcall(function() state.login.name = "hacked" end)
+				seen[where] = state.login.name .. "|" .. state.login.subject .. "|" .. tostring(ok)
+			else
+				seen[where] = "nil"
+			end
+			return { widgets = { { id = "l", type = "label", x = 0, y = 0, w = 10, h = 10, text = seen[where] } } }
+		end
+		ui.define("who", function(state) return look("screen", state) end)
+		ui.define_hud(function(state) return look("hud", state) end)
+	)"));
+	ui.open("who", "{}");
+	REQUIRE(ui.render_frame().size() == 1);
+	CHECK(ui.render_frame()[0].text == "nil");
+	CHECK(ui.render_hud()[0].text == "nil");
+
+	ui.set_login(UiRuntime::LoginView{ "alex#2", "sub-2" });
+	CHECK(ui.render_frame()[0].text == "alex#2|sub-2|false"); // the write raised
+	CHECK(ui.render_hud()[0].text == "alex#2|sub-2|false");
+
+	ui.set_login(std::nullopt);
+	CHECK(ui.render_hud()[0].text == "nil");
+}
+
 TEST_CASE("render_frame() re-evaluates every call, reflecting state mutated by a click handler") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
@@ -217,8 +247,8 @@ TEST_CASE("close() invokes on_close (from the latest frame) exactly once and cle
 }
 
 TEST_CASE("ui.define_hud + render_hud() composes a progress bar entirely in "
-		"Lua from the raw kRect primitive + client.break_progress()/"
-		"screen_size() (Phase 6.16)") {
+		  "Lua from the raw kRect primitive + client.break_progress()/"
+		  "screen_size() (Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -266,7 +296,7 @@ TEST_CASE("ui.define_hud + render_hud() composes a progress bar entirely in "
 }
 
 TEST_CASE("ui.define with an \"icon\" widget carries its item id and tint "
-		"(REMAINING_TASKS.md Phase 4's item grid widget gap)") {
+		  "(REMAINING_TASKS.md Phase 4's item grid widget gap)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define("test", function(state)
@@ -309,8 +339,53 @@ TEST_CASE("ui \"icon\" widget with no item field defaults to air") {
 	CHECK(widgets[0].item == vb::core::BlockId::kAir);
 }
 
+TEST_CASE("ui.define with a \"sprite\" widget carries its texture, crop and tint") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		ui.define("test", function(state)
+			return {
+				widgets = {
+					{ id = "whole", type = "sprite", x = 4, y = 6, w = 64, h = 64,
+						texture = "textures/skins/red.png" },
+					{ id = "frame", type = "sprite", x = 80, y = 6, w = 64, h = 64,
+						texture = "textures/player.png", src = { 128, 0, 128, 128 },
+						color = { 200, 100, 50, 255 } },
+				},
+			}
+		end)
+	)"));
+	ui.open("test", "{}");
+	const auto &widgets = ui.render_frame();
+	REQUIRE(widgets.size() == 2);
+	CHECK(widgets[0].type == WidgetType::kSprite);
+	CHECK(widgets[0].texture == "textures/skins/red.png");
+	// No `src`: a non-positive size means "the whole image".
+	CHECK(widgets[0].src_w <= 0.0f);
+	CHECK(widgets[0].fill_r == 255);
+	CHECK(widgets[1].src_x == doctest::Approx(128.0f));
+	CHECK(widgets[1].src_w == doctest::Approx(128.0f));
+	CHECK(widgets[1].src_h == doctest::Approx(128.0f));
+	CHECK(widgets[1].fill_r == 200);
+	CHECK(widgets[1].fill_g == 100);
+}
+
+TEST_CASE("client.my_appearance() is nil when no session is attached") {
+	UiRuntime ui;
+	REQUIRE(ui.load_pack_file(R"(
+		ui.define("test", function(state)
+			local mine = client.my_appearance()
+			return { widgets = { { id = mine == nil and "none" or "some", type = "label",
+				x = 0, y = 0, w = 1, h = 1 } } }
+		end)
+	)"));
+	ui.open("test", "{}");
+	const auto &widgets = ui.render_frame();
+	REQUIRE(widgets.size() == 1);
+	CHECK(widgets[0].id == "none");
+}
+
 TEST_CASE("render_hud() is a safe no-op when no HUD was ever registered "
-		"(Phase 6.16)") {
+		  "(Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file("-- no ui.define_hud call"));
 	ui.set_break_progress(0.9f);
@@ -318,7 +393,7 @@ TEST_CASE("render_hud() is a safe no-op when no HUD was ever registered "
 }
 
 TEST_CASE("the HUD's state table persists across render_hud() calls, "
-		"independent of any modal ui.define screen (Phase 6.16)") {
+		  "independent of any modal ui.define screen (Phase 6.16)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -370,7 +445,7 @@ TEST_CASE("client.time() and client.mouse_position() read back what was set") {
 }
 
 TEST_CASE("client.health()/client.hunger() are nil until a status is set, "
-		"then report current/max") {
+		  "then report current/max") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		ui.define_hud(function(state)
@@ -388,8 +463,8 @@ TEST_CASE("client.health()/client.hunger() are nil until a status is set, "
 }
 
 TEST_CASE("report_hud_click invokes a HUD widget's on_click callback, "
-		"distinct from a modal screen's own widget_by_id map (REMAINING_TASKS' "
-		"'HUD widgets aren't wired to report_click/report_change' gap)") {
+		  "distinct from a modal screen's own widget_by_id map (REMAINING_TASKS' "
+		  "'HUD widgets aren't wired to report_click/report_change' gap)") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		hud_clicked = false
@@ -415,7 +490,7 @@ TEST_CASE("report_hud_click invokes a HUD widget's on_click callback, "
 }
 
 TEST_CASE("report_hud_change/report_hud_list_change invoke a HUD widget's "
-		"on_change callback") {
+		  "on_change callback") {
 	UiRuntime ui;
 	REQUIRE(ui.load_pack_file(R"(
 		last_text = nil

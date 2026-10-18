@@ -177,5 +177,5 @@ vbtest/scene.py   build-a-scene helpers (block_under_feet, clear_corridor, step_
 vbtest/png.py     tiny PNG reader for screenshot assertions
 vbtest/stack.py   start_server / ClientFactory: what the fixtures use, also usable outside them
 vbtest/traceview.py  failed-test trace.html generator
-test_*.py         the tests (basics, bad network, windowed, trace viewer, attach, recorder)
+test_*.py         the tests (basics, bad network, windowed, trace viewer, attach, recorder, `vb pack dev`)
 ```

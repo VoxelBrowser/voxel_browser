@@ -16,7 +16,9 @@
 vb.register_structure(require("structures.acacia_tree"))
 
 local base_terrain = vb.noise.fbm({
-	source = vb.noise.value({ frequency = 1 / 96 }),
+	-- The source stays at frequency 1: the fbm's own `frequency` below
+	-- multiplies it (a source at 1/96 too would mean features ~9000 blocks wide).
+	source = vb.noise.value(1),
 	octaves = 5,
 	lacunarity = 2.0,
 	gain = 0.5,
@@ -27,7 +29,7 @@ local base_terrain = vb.noise.fbm({
 -- the pipeline's output visibly different from the plain fBm heightmap
 -- content/base's biomes (which never call set_pipeline at all) still use --
 -- see docs/lua-api.md's vb.noise.combine entry.
-local detail = vb.noise.cellular({ frequency = 1 / 24 })
+local detail = vb.noise.cellular(1 / 24)
 local height_noise = vb.noise.combine({ a = base_terrain, b = detail, op = "add" })
 
 vb.worldgen.set_pipeline({
@@ -46,7 +48,7 @@ vb.worldgen.set_pipeline({
 	carvers = {
 		{
 			noise = vb.noise.fbm({
-				source = vb.noise.value({ frequency = 1 / 16 }),
+				source = vb.noise.value(1),
 				octaves = 3,
 				frequency = 1 / 16,
 			}),

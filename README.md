@@ -204,7 +204,9 @@ vb pack dev                    # hosts it, restarts on save, opens the client (-
 and texture, a `README.md` and an `AGENTS.md` for humans and agents, and `.luarc.json` plus `.vb/lua/`
 LuaCATS stubs so the Lua Language Server (VS Code "Lua" by sumneko, Neovim, ...) completes the whole
 API. Files in `ui/` run in the client UI VM (`ui`, `client`); every other file runs in the server VM
-(`vb`) — `vb pack check` reports a mix-up with its line number.
+(`vb`) — `vb pack check` reports a mix-up with its line number. It also warns about keys the engine
+would ignore in a definition table (`max_damge = 3`), blocks without a texture (or with a texture
+file the pack lacks), and API calls newer than the lowest engine your `engine_version_req` admits.
 
 Reference, all shipped with each release and readable offline (`vb docs`): the
 [Lua quick reference](docs/lua-reference/README.md) (one line per function, generated from the stubs in

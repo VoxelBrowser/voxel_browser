@@ -1406,3 +1406,20 @@ half of its own original scope.
       `WorldReplicator`'s old hardcoded constant. New
       `vb.action.set_params{reach=}`/`get_params()` and
       `vb.physics.get_params()` (its own namespace, not `vb.combat`).
+
+### Phase 6 leftovers closed (2026-10-17)
+
+- **Swing animation:** `PunchParams::swing_clip` / `swing_clip_seconds`
+  (`vb.combat.set_params`). Every `punch()` that clears the cooldown sets the
+  puncher's replicated clip override (the existing `entity:set_clip` channel,
+  so no protocol change) and clears it afterwards unless the pack replaced it.
+  `content/base` turns it on; `textures/player.png` gained two `swing` columns.
+- **PvP armor / knockback:** `player:set_armor(fraction)` / `get_armor()`
+  (clamped to `[0, 0.95]`, PvP damage only, persists across respawn);
+  `knockback_speed` / `knockback_lift` set the victim's velocity along the
+  puncher's look direction (off by default, armor doesn't reduce it).
+- **UI `sprite` widget + `client.my_appearance()`:** `sprite` draws a pack PNG
+  (`texture`, optional `src = {x,y,w,h}`, `color` tint); `UiRenderer` loads it
+  from the synced pack or, in singleplayer, off disk. `my_appearance()` returns
+  the own `visual_override` (or nil) so a preview can stack one sprite per layer.
+- Tests: three `blockedit_test.cpp` cases, two `ui_runtime_test.cpp` cases.

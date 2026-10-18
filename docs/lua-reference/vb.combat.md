@@ -6,7 +6,7 @@
 
 `vb.combat.set_params(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Overrides punch/combat tunables.
 

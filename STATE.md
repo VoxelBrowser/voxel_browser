@@ -90,16 +90,15 @@ content-only (e.g. the user explicitly asks for a content-pack feature).
   `VB_WITH_AUTOMATION` defaults OFF, `VB_DISTRIBUTION` + automation is a
   configure error, and servers built without it refuse automation clients.
   **Implementing or changing any E-phase? Follow `docs/e2e-automation.md`
-  §11.** Still unverified: the CI `e2e` job has never run on a GitHub runner
-  (a feature-branch push triggers nothing — open a PR, push to a
-  `*-workflow` branch, or dispatch manually); Windows (Winsock code) and
+  §11.** The Linux CI `e2e` job runs on PRs and is green (2026-10-17; a
+  feature-branch push alone triggers nothing — open a PR, push to a
+  `*-workflow` branch, or dispatch manually). Windows (Winsock code) and
   macOS are unbuilt.
 - **In-engine auth (Phase 9) landed** 2026-10-05/06 — see
   `REMAINING_TASKS.md` Phase 9 for what is still open, `docs/auth.md` for
   operators.
-- **macOS CI `VB_WITH_NET` (2026-09-30) has never run on a real runner.** If
-  the first run fails, the three likely suspects are listed in
-  `state/changelog-part4.md`'s 2026-09-30 entry.
+- **macOS CI `VB_WITH_NET`** (2026-09-30) is green on real runners since
+  2026-10-17 (run 39044682584), as are the ASan/TSan legs.
 - **`CMAKE_POLICY_VERSION_MINIMUM=3.5` shim stays** — lz4 v1.9.4 needs it
   now, not doctest (bumped to v2.5.3). Drop it only once lz4 is bumped.
 - **Don't remove `SOL_FUNCTION_CALL_VALUE_SEMANTICS=1`** on the `sol2` target
@@ -212,7 +211,7 @@ Both sections were historical (Phase 0, 2026-09-10) and moved to
   `libssl-dev libprotobuf-dev protobuf-compiler` for `VB_WITH_NET`.
 - **`VB_WITH_NET` CI coverage:** Linux (apt) and Windows (vcpkg) build it;
   macOS builds it via the `build_net_deps` job (universal protobuf/OpenSSL
-  via `lipo`), never verified by a real run — see "Current status".
+  via `lipo`), green on real runs since 2026-10-17.
 - **Never call `find_package(Protobuf REQUIRED)` a second time anywhere in
   the tree.** GameNetworkingSockets' own `src/CMakeLists.txt` already calls
   it; a second call (even as a "fail fast" convenience) fatal-errors on
@@ -468,8 +467,8 @@ or `REMAINING_TASKS.md`/`ARCHITECTURE_SPEC.md` for design-level context.
   `S2CServerInfo{...}` in tests must now list it (or use member assignment).
 - `src/script/lua_global_scan.c` reads Lua 5.4 internals (`#error` on another version). Bumping the pinned Lua
   means re-checking it.
-- `vb.noise.value`/`cellular` take a **number** (frequency); a table argument is silently ignored (sol2
-  `optional<double>`), which is what `content/examples/kitchen_sink/worldgen.lua` does today.
+- `vb.noise.value`/`cellular` take a number **or** `{ frequency = n }` (since 2026-10-18; the table used to
+  be silently ignored). Frequencies multiply down the graph: an fbm's `source` belongs at 1.
 - The asset manifest skips dot-entries and pack-root README.md/AGENTS.md; a pack file that must reach clients
   cannot start with a dot.
 - Local tooling: CI's clang-format is the newest pip release (23.x); Ubuntu's 18.x disagrees on existing

@@ -385,6 +385,24 @@ AuthLoad validate(RawTable &raw, const AuthOverrides &ov) {
 				}
 			}
 		}
+		const auto google_id = r.str("google_client_id", 256);
+		const auto google_secret = r.str("google_client_secret", 256);
+		if (r.failed()) {
+			return fail(r.error());
+		}
+		const bool google = std::find(cfg.sign_in.begin(), cfg.sign_in.end(), FirebaseSignIn::kGoogle) != cfg.sign_in.end();
+		if (google && !google_id) {
+			return fail("sign_in includes \"google\" but 'google_client_id' is missing (the client id of a "
+						"Google Cloud OAuth client of type \"Desktop app\")");
+		}
+		if ((google_id && !token_chars(*google_id)) || (google_secret && !token_chars(*google_secret))) {
+			return fail("'google_client_id' or 'google_client_secret' contains invalid characters");
+		}
+		if (google_secret && !google_id) {
+			return fail("'google_client_secret' needs 'google_client_id'");
+		}
+		cfg.google_client_id = google_id.value_or(std::string());
+		cfg.google_client_secret = google_secret.value_or(std::string());
 	} else {
 		const auto issuer = r.str("issuer", 256);
 		const auto client_id = r.str("client_id", 256);
@@ -495,6 +513,9 @@ std::string describe(const AuthConfig &c) {
 		o << " api_key=<redacted> sign_in=";
 		for (std::size_t i = 0; i < c.sign_in.size(); ++i) {
 			o << (i ? "," : "") << (c.sign_in[i] == FirebaseSignIn::kPassword ? "password" : "google");
+		}
+		if (!c.google_client_id.empty()) {
+			o << " google_client_id=" << c.google_client_id;
 		}
 	} else {
 		o << " scopes=" << join(c.scopes);

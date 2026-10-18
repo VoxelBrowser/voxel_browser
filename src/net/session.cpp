@@ -392,6 +392,10 @@ ServerSession::PunchResult ServerSession::punch(
 		// punches that happen to land.
 		puncher_conn->punch_cooldown_remaining = punch_params_.punch_cooldown_seconds;
 	}
+	if (!punch_params_.swing_clip.empty()) {
+		set_script_entity_clip(puncher, punch_params_.swing_clip);
+		puncher_conn->swing_clip_remaining = punch_params_.swing_clip_seconds;
+	}
 	// Read straight from the registry, not interest_ (only refreshed once
 	// per tick, after all of this tick's messages -- including this punch,
 	// almost always called mid-network_io from a vb.on("player_input")
@@ -464,7 +468,26 @@ ServerSession::PunchResult ServerSession::punch(
 			(!block_hit.hit || best_player_t <= block_t)) {
 		result.hit_player = true;
 		result.target = best_player;
-		damage_player(best_player, punch_params_.player_damage, "pvp");
+		float damage = punch_params_.player_damage;
+		for (auto &[conn, other] : conns_) {
+			(void)conn;
+			if (other.playing && other.net_id == best_player) {
+				damage *= 1.0f - other.armor;
+				break;
+			}
+		}
+		damage_player(best_player, damage, "pvp");
+		if (punch_params_.knockback_speed > 0.0f || punch_params_.knockback_lift > 0.0f) {
+			// Horizontal push along the puncher's look direction; a straight
+			// up/down look (no horizontal component) only lifts.
+			const double hlen = std::sqrt(dir.x * dir.x + dir.z * dir.z);
+			core::Vec3d push{ 0.0, static_cast<double>(punch_params_.knockback_lift), 0.0 };
+			if (hlen > 1e-9) {
+				push.x = dir.x / hlen * static_cast<double>(punch_params_.knockback_speed);
+				push.z = dir.z / hlen * static_cast<double>(punch_params_.knockback_speed);
+			}
+			set_player_velocity(best_player, push);
+		}
 		return result;
 	}
 
@@ -790,6 +813,21 @@ void ServerSession::set_player_velocity(core::NetId id, core::Vec3d vel) {
 	}
 }
 
+std::optional<core::Vec3d> ServerSession::player_velocity(core::NetId id) const {
+	for (const auto &[conn, state] : conns_) {
+		(void)conn;
+		if (state.playing && state.net_id == id) {
+			return registry_.get<ecs::Velocity>(state.entity).value;
+		}
+	}
+	return std::nullopt;
+}
+
+std::optional<std::string> ServerSession::script_entity_clip(core::NetId id) const {
+	const auto it = script_entity_props_.find(id);
+	return it == script_entity_props_.end() ? std::nullopt : it->second.clip;
+}
+
 ConnId ServerSession::conn_for_player(core::NetId id) const {
 	for (const auto &[conn, state] : conns_) {
 		if (state.playing && state.net_id == id) {
@@ -837,6 +875,21 @@ void ServerSession::system_network_io(double dt_seconds) {
 			if (state.punch_cooldown_remaining > 0.0) {
 				state.punch_cooldown_remaining =
 						std::max(0.0, state.punch_cooldown_remaining - dt_seconds);
+			}
+		}
+	}
+
+	for (auto &[c, state] : conns_) {
+		(void)c;
+		if (state.swing_clip_remaining > 0.0) {
+			state.swing_clip_remaining = std::max(0.0, state.swing_clip_remaining - dt_seconds);
+			if (state.swing_clip_remaining <= 0.0) {
+				// Only clear our own clip: a pack's entity:set_clip since the
+				// swing stays.
+				const auto props = script_entity_props_.find(state.net_id);
+				if (props != script_entity_props_.end() && props->second.clip == punch_params_.swing_clip) {
+					set_script_entity_clip(state.net_id, std::nullopt);
+				}
 			}
 		}
 	}
@@ -1369,6 +1422,26 @@ void ServerSession::apply_damage(Conn &state, float amount, std::string_view cau
 		state.death_cause = std::string(cause);
 		state.death_health_before = before;
 	}
+}
+
+void ServerSession::set_player_armor(core::NetId id, float fraction) {
+	for (auto &[conn, state] : conns_) {
+		(void)conn;
+		if (state.playing && state.net_id == id) {
+			state.armor = core::clamp(fraction, 0.0f, 0.95f);
+			return;
+		}
+	}
+}
+
+std::optional<float> ServerSession::player_armor(core::NetId id) const {
+	for (const auto &[conn, state] : conns_) {
+		(void)conn;
+		if (state.playing && state.net_id == id) {
+			return state.armor;
+		}
+	}
+	return std::nullopt;
 }
 
 void ServerSession::damage_player(core::NetId id, float amount, std::string_view cause) {

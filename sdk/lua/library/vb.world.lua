@@ -7,6 +7,7 @@
 vb.world = {}
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Block id at a voxel.
 ---```lua
 ---if vb.world.get_block(0, 64, 0) == 0 then print("air") end
@@ -18,6 +19,7 @@ vb.world = {}
 function vb.world.get_block(x, y, z) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Sets a block and replicates it. Known gap: does not run the relight cascade.
 ---```lua
 ---vb.world.set_block(0, 64, 0, 1)
@@ -38,6 +40,7 @@ function vb.world.set_block(x, y, z, id) end
 ---@field nz integer
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Casts a ray through the voxel world; `nil` when nothing is hit within `max`.
 ---```lua
 ---local hit = vb.world.raycast({x=0,y=70,z=0}, {x=0,y=-1,z=0}, 32)
@@ -50,6 +53,7 @@ function vb.world.set_block(x, y, z, id) end
 function vb.world.raycast(origin, dir, max) end
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Spawns a dropped item that nearby players auto-collect.
 ---```lua
 ---vb.world.spawn_item_drop({x=0,y=65,z=0}, 3, 1)
@@ -64,6 +68,7 @@ function vb.world.spawn_item_drop(pos, item, count) end
 ---@field text? string|EntityText World-space label; fields not given come from the kind's `text`. Change it later with `entity:set_text`.
 
 ---@vb context runtime
+---@vb since 0.1.0
 ---Server pack VM only. Spawns an entity of a registered kind and returns its `self` table.
 ---```lua
 ---local slime = vb.world.spawn("mypack:slime", {x=0,y=70,z=0})

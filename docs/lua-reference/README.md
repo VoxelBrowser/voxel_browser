@@ -25,6 +25,8 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`Player:set_visual_override(override)`](Player.md#player-set-visual-override) — Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any `EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every client in range sees it within a tick or two, including clients that come into range later and the player's own third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
 - [`Player:get_hunger() -> {current:`](Player.md#player-get-hunger) — Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 - [`Player:add_hunger(amount)`](Player.md#player-add-hunger) — Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to `[0, max]`.
+- [`Player:set_armor(fraction)`](Player.md#player-set-armor) — Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+- [`Player:get_armor() -> number|nil`](Player.md#player-get-armor) — Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
 - [`Player:break_block(x, y, z) -> boolean`](Player.md#player-break-block) — Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
 - [`Player:place_block(x, y, z, block) -> boolean`](Player.md#player-place-block) — Server pack VM only. Places `block` through the validated pipeline.
 - [`Player:punch(block_damage) -> PunchResult`](Player.md#player-punch) — Server pack VM only. Throws one punch along the player's look direction (players or blocks, whichever is closer).
@@ -53,7 +55,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 
 [Full reference](ui.md)
 
-- [`ui.define(name, render_fn)`](ui.md#ui-define) — Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`.
+- [`ui.define(name, render_fn)`](ui.md#ui-define) — Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`. `state.login` is engine-owned: a read-only `{ name, subject }` when the server's pack has an auth.lua, else nil.
 - [`ui.define_hud(render_fn)`](ui.md#ui-define-hud) — Client UI VM only. Registers the single always-on HUD (evaluated every frame, never opened or closed).
 - [`ui.send_event(kind, value)`](ui.md#ui-send-event) — Client UI VM only. Sends a UI event to the server (`ui_event` handler); the screen and widget are filled in automatically.
 - [`ui.close(opts)`](ui.md#ui-close) — Client UI VM only. Closes the current screen (always notifies the server with a "close" event). By default the mouse stays free; `capture_mouse = true` drops the player back into the game, and the click that closed the screen is not sent as a punch. Calling it from the screen's own render function is fine: the screen closes right after that render returns.
@@ -74,6 +76,7 @@ One line per function. Click a name for its parameters and example. Narrative/de
 - [`client.mouse_captured() -> boolean`](client.md#client-mouse-captured) — Client UI VM only. Whether the mouse is captured (looking around) right now.
 - [`client.inventory() -> {name:`](client.md#client-inventory) — Client UI VM only. Inventory slots (`item` 0 = empty); live.
 - [`client.selected_slot() -> integer`](client.md#client-selected-slot) — Client UI VM only. 1-based selected hotbar slot.
+- [`client.my_appearance() -> {texture?:`](client.md#client-my-appearance) — Client UI VM only. The local player's own appearance as set by `player:set_visual_override`, or `nil` when the pack set none. Only the fields the override sets are present. Feed `texture` / `layers[i].texture` to `sprite` widgets for a wardrobe preview.
 - [`client.health() -> {current:`](client.md#client-health) — Client UI VM only. Local health, or `nil` before the first status arrives.
 - [`client.hunger() -> {current:`](client.md#client-hunger) — Client UI VM only. Local hunger, or `nil` before the first status arrives.
 
@@ -175,8 +178,8 @@ One line per function. Click a name for its parameters and example. Narrative/de
 [Full reference](vb.noise.md)
 
 - [`vb.noise.constant(value) -> NoiseNode`](vb.noise.md#vb-noise-constant) — Server pack VM only. Constant noise node.
-- [`vb.noise.value(frequency) -> NoiseNode`](vb.noise.md#vb-noise-value) — Server pack VM only. Value noise.
-- [`vb.noise.cellular(frequency) -> NoiseNode`](vb.noise.md#vb-noise-cellular) — Server pack VM only. Cellular (Worley) noise.
+- [`vb.noise.value(frequency) -> NoiseNode`](vb.noise.md#vb-noise-value) — Server pack VM only. Value noise. The frequency may also be given as `{ frequency = n }`. Inside `vb.noise.fbm` leave it at 1: the fbm node's own `frequency` multiplies it.
+- [`vb.noise.cellular(frequency) -> NoiseNode`](vb.noise.md#vb-noise-cellular) — Server pack VM only. Cellular (Worley) noise. The frequency may also be given as `{ frequency = n }`.
 - [`vb.noise.fbm(def) -> NoiseNode`](vb.noise.md#vb-noise-fbm) — Server pack VM only. Fractal Brownian motion over a source node.
 - [`vb.noise.remap(def) -> NoiseNode`](vb.noise.md#vb-noise-remap) — Server pack VM only. Linearly remaps a node's range.
 - [`vb.noise.combine(def) -> NoiseNode`](vb.noise.md#vb-noise-combine) — Server pack VM only. Combines two nodes.

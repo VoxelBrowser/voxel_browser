@@ -58,6 +58,18 @@ TEST_CASE("rle_decode rejects a size mismatch") {
 	CHECK_FALSE(rle_decode(sp(enc), 101));
 }
 
+TEST_CASE("rle_decode rejects a run length that would wrap the size check") {
+	// varint 2^64 - 1 (ten bytes), then the value byte. `out.size() + run` used to wrap to a
+	// small number and then ask std::vector for 2^64 bytes (found by fuzz_protocol).
+	std::vector<std::byte> in = { std::byte{ 0x02 }, std::byte{ 0x07 } };
+	for (int i = 0; i < 9; ++i) {
+		in.push_back(std::byte{ 0xff });
+	}
+	in.push_back(std::byte{ 0x01 });
+	in.push_back(std::byte{ 0x07 });
+	CHECK_FALSE(rle_decode(sp(in), 16));
+}
+
 TEST_CASE("chunk payload round-trips blocks and light") {
 	auto reg = BlockRegistry::base();
 	Chunk src({ 2, -1, 3 });

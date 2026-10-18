@@ -12,10 +12,18 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     strategy:
+      # A failing arm64 leg shouldn't cancel the x86_64 legs mid-build.
+      fail-fast: false
       matrix:
         target: [linux]
-        arch: [x86_64]
+        arch: [x86_64, arm64]
         build_type: [release, debug, asan, tsan]
+        exclude:
+          # Sanitizer coverage stays x86_64-only; arm64 is for release archives.
+          - arch: arm64
+            build_type: asan
+          - arch: arm64
+            build_type: tsan
         include:
           - build_type: release
             cmake_build_type_keyword: Release
@@ -29,11 +37,11 @@ jobs:
           - build_type: tsan
             cmake_build_type_keyword: RelWithDebInfo
             sanitizer_cmake_flags: -DVB_ENABLE_TSAN=ON
-          - os: ubuntu-latest
-            target: linux
-          - target: linux
-            arch: x86_64
+          - arch: x86_64
+            os: ubuntu-latest
             cxxflags: -m64
+          - arch: arm64
+            os: ubuntu-24.04-arm
 
     steps:
       - name: Check out code
@@ -81,6 +89,17 @@ jobs:
           # unused) for the other build_type legs.
           TSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/tsan.supp
         run: ctest --output-on-failure
+
+      # The Secret Service keychain backend (libsecret, dlopen'ed) against a real gnome-keyring on a
+      # private session bus. One leg is enough: the code is the same on every Linux.
+      - name: Test the Secret Service keychain
+        if: matrix.build_type == 'debug' && matrix.arch == 'x86_64'
+        shell: bash
+        working-directory: build
+        run: |
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0
+          dbus-run-session -- sh -c 'echo ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            VB_TEST_REAL_KEYCHAIN=1 ./vb_tests --test-case="*platform keychain*"'
 
       - name: Set up Python
         if: matrix.build_type == 'release' || matrix.build_type == 'debug'
@@ -179,6 +198,7 @@ jobs:
       # ASan + UBSan: real two-process shutdown is exactly where leaks and teardown
       # bugs show up. NET/LUA/COMPRESSION: a real UDP server, the base pack's
       # mechanics and UI, and asset sync (how clients receive the pack's UI scripts).
+      # CLI: test_pack_dev.py drives the real `vb pack dev` against this build.
       - name: Configure
         shell: bash
         run: |
@@ -191,7 +211,7 @@ jobs:
             -DVB_WITH_REPLICATION=ON \
             -DVB_WITH_COMPRESSION=ON \
             -DVB_WITH_AUTOMATION=ON \
-            -DVB_BUILD_CLI=OFF \
+            -DVB_BUILD_CLI=ON \
             -DVB_ENABLE_ASAN=ON -DVB_ENABLE_UBSAN=ON
 
       # CMake silently skips registering the e2e test when its python can't import pytest. A
@@ -222,4 +242,59 @@ jobs:
         with:
           name: e2e-failure-logs
           path: ${{ github.workspace }}/build/e2e-artifacts
+          if-no-files-found: ignore
+
+  # libFuzzer runs of tests/fuzz/ (protocol decoders, chunk codec, LZ4, ID tokens, JWKS, the
+  # loopback sign-in listener). Every other leg already replays the seeds and regressions plus
+  # deterministic mutations through ctest; this one lets coverage-guided fuzzing look for new
+  # inputs for a fixed time per target. A crash fails the job and uploads the input -- add it to
+  # tests/fuzz/regressions/<target>/ with the fix.
+  fuzz:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake clang libclang-rt-dev libssl-dev libcurl4-openssl-dev
+
+      - name: Configure
+        shell: bash
+        run: |
+          cmake -S "${{ github.workspace }}" -B "${{ github.workspace }}/build" -G Ninja \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DVB_WARNINGS_AS_ERRORS=ON \
+            -DVB_BUILD_FUZZERS=ON \
+            -DVB_BUILD_CLIENT=OFF -DVB_BUILD_SERVER=OFF -DVB_BUILD_CLI=OFF -DVB_BUILD_EDITOR=OFF \
+            -DVB_WITH_LUA=OFF -DVB_WITH_COMPRESSION=ON -DVB_WITH_AUTH=ON
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake --build "${{ github.workspace }}/build" --target \
+            fuzz_protocol fuzz_protocol_replay fuzz_auth fuzz_auth_replay
+
+      - name: Fuzz
+        shell: bash
+        working-directory: build
+        run: |
+          for t in protocol auth; do
+            mkdir -p "corpus/$t" crashes
+            "./fuzz_${t}_replay" --write-seeds "corpus/$t"
+            cp "${{ github.workspace }}/tests/fuzz/regressions/$t/"* "corpus/$t/" 2>/dev/null || true
+            "./fuzz_$t" "corpus/$t" -max_total_time=180 -timeout=10 -rss_limit_mb=2048 \
+              -artifact_prefix="crashes/$t-" -print_final_stats=1
+          done
+
+      - name: Upload crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-crashes
+          path: ${{ github.workspace }}/build/crashes
           if-no-files-found: ignore

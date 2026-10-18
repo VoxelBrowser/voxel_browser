@@ -38,7 +38,8 @@ core::Result<std::vector<std::byte>, ProtocolError> rle_decode(
 		if (r.failed()) {
 			break;
 		}
-		if (out.size() + run > expected_size) {
+		// Not `out.size() + run > expected_size`: a run near 2^64 wraps that sum (found by fuzz_protocol).
+		if (run > expected_size - out.size()) {
 			return Err{ ProtocolError::kLengthExceeded };
 		}
 		out.insert(out.end(), static_cast<std::size_t>(run),
@@ -134,7 +135,7 @@ core::Result<void, ProtocolError> decode_chunk_payload(
 		if (r.failed()) {
 			break;
 		}
-		if (idx >= palette.size() || written + run > kChunkVolume) {
+		if (idx >= palette.size() || run > kChunkVolume - written) { // no wrapping sum
 			return Err{ ProtocolError::kMalformed };
 		}
 		if (idx != 0) {

@@ -231,6 +231,9 @@ TEST_CASE("auth pack: two people called alex get alex and alex#2") {
 	rig.pump();
 	REQUIRE(a.joined());
 	REQUIRE(b.joined());
+	// Each client learns the name it actually got (S2C_JoinAccept.your_name, v33).
+	CHECK(a.join_accept()->your_name == "alex");
+	CHECK(b.join_accept()->your_name == "alex#2");
 	REQUIRE(rig.rt->load_pack_file(R"(
 		assert(#join_calls == 2)
 		assert(join_calls[1].name == "alex" and join_calls[1].login.name == "alex")

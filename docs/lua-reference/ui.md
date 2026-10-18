@@ -6,9 +6,9 @@
 
 `ui.define(name, render_fn)`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
-Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`.
+Client UI VM only. Registers a named screen; `render_fn(state)` runs every UI frame while it is open. `state` is one table that persists across frames, seeded from `player:open_ui(name, ctx)`. `state.login` is engine-owned: a read-only `{ name, subject }` when the server's pack has an auth.lua, else nil.
 
 | Parameter | Type | Description |
 | --- | --- | --- |
@@ -28,7 +28,7 @@ end)
 
 `ui.define_hud(render_fn)`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Registers the single always-on HUD (evaluated every frame, never opened or closed).
 
@@ -47,7 +47,7 @@ end)
 
 `ui.send_event(kind, value)`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Sends a UI event to the server (`ui_event` handler); the screen and widget are filled in automatically.
 
@@ -64,7 +64,7 @@ ui.send_event("buy", { item = "base:wood" })
 
 `ui.close(opts)`
 
-context: **ui**
+context: **ui** · since: **0.1.0**
 
 Client UI VM only. Closes the current screen (always notifies the server with a "close" event). By default the mouse stays free; `capture_mouse = true` drops the player back into the game, and the click that closed the screen is not sent as a punch. Calling it from the screen's own render function is fine: the screen closes right after that render returns.
 

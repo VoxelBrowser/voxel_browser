@@ -113,11 +113,13 @@ SignInCoordinator::provider() {
 		}
 		if (options_.token_file) {
 			const auto path = *options_.token_file;
-			return [path]() -> net::TokenPoll {
+			return [this, path]() -> net::TokenPoll {
 				net::TokenPoll p;
 				p.done = true;
 				if (auto t = read_token_file(path)) {
 					p.token = std::move(*t);
+					std::lock_guard lock(mu_);
+					subject_ = subject_from_id_token(p.token);
 				} else {
 					p.error = "could not read the sign-in token file";
 				}
@@ -134,11 +136,13 @@ SignInCoordinator::reauth_provider() {
 		if (options_.token_file) {
 			// Re-read for every re-auth so a test can rotate or withhold it.
 			const auto path = *options_.token_file;
-			return [path]() -> net::TokenPoll {
+			return [this, path]() -> net::TokenPoll {
 				net::TokenPoll p;
 				p.done = true;
 				if (auto t = read_token_file(path)) {
 					p.token = std::move(*t);
+					std::lock_guard lock(mu_);
+					subject_ = subject_from_id_token(p.token);
 				} else {
 					p.error = "could not read the sign-in token file";
 				}
@@ -254,6 +258,7 @@ net::TokenPoll SignInCoordinator::poll_ticket() {
 		p.error = "sign-in cancelled";
 	} else if (token_ready_) {
 		p.done = true;
+		subject_ = subject_from_id_token(token_);
 		p.token = std::move(token_);
 		token_.clear();
 		token_ready_ = false;
@@ -275,6 +280,11 @@ std::optional<protocol::S2CAuthChallenge> SignInCoordinator::challenge() const {
 std::string SignInCoordinator::last_error() const {
 	std::lock_guard lock(mu_);
 	return error_;
+}
+
+std::string SignInCoordinator::signed_in_subject() const {
+	std::lock_guard lock(mu_);
+	return subject_;
 }
 
 bool SignInCoordinator::needs_trust() const {
@@ -313,6 +323,43 @@ bool SignInCoordinator::supports_password() const {
 		return false;
 	}
 	return ("," + param(*challenge_, "sign_in") + ",").find(",password,") != std::string::npos;
+}
+
+bool SignInCoordinator::supports_google() const {
+	std::lock_guard lock(mu_);
+	if (!challenge_ || challenge_->provider != "firebase" || param(*challenge_, "google_client_id").empty()) {
+		return false;
+	}
+	return ("," + param(*challenge_, "sign_in") + ",").find(",google,") != std::string::npos;
+}
+
+void SignInCoordinator::start_google() {
+	std::lock_guard lock(mu_);
+	if (phase_ != Phase::kChoosing || !challenge_ || task_ || needs_trust_ || !options_.http ||
+			challenge_->provider != "firebase") {
+		return;
+	}
+	OidcSignInParams p;
+	p.http = options_.http;
+	p.issuer = options_.google_issuer;
+	p.client_id = param(*challenge_, "google_client_id");
+	p.client_secret = param(*challenge_, "google_client_secret");
+	p.scopes = { "openid", "email", "profile" };
+	p.nonce = active_nonce_; // ends up in the Google token only; Firebase tokens carry none
+	p.open_browser = options_.open_browser;
+	if (p.client_id.empty()) {
+		return;
+	}
+	const std::string api_key = param(*challenge_, "api_key");
+	error_.clear();
+	phase_ = Phase::kWorking;
+	task_ = std::make_unique<SignInTask>([p, api_key](const std::atomic<bool> &c) {
+		SignInResult google = oidc_browser_sign_in(p, c);
+		if (!google.ok) {
+			return google;
+		}
+		return firebase_idp_sign_in(*p.http, api_key, "google.com", google.id_token);
+	});
 }
 
 void SignInCoordinator::start_browser() {

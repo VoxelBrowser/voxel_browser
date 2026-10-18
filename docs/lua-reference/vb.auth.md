@@ -6,7 +6,7 @@
 
 `vb.auth.required() -> boolean`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. `true` iff the pack's `auth.lua` is active (every `Player` then has a login).
 

@@ -72,6 +72,11 @@ struct AuthConfig {
 	std::string api_key; // firebase only; public by design, still not logged
 	std::vector<std::string> scopes; // oidc/keycloak; always contains "openid"
 	std::vector<FirebaseSignIn> sign_in; // firebase only
+	// firebase + sign_in "google": the OAuth client of a Google Cloud "Desktop
+	// app" (the client signs in to Google with it, then exchanges the Google ID
+	// token for a Firebase one). Both public by design for installed apps.
+	std::string google_client_id;
+	std::string google_client_secret;
 	std::string name_claim;
 	std::vector<std::string> claims; // allowlist of claims exposed to Lua
 	std::uint32_t max_token_age_seconds = 300;

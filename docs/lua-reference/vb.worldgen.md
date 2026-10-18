@@ -6,7 +6,7 @@
 
 `vb.worldgen.set_pipeline(def)`
 
-context: **load**
+context: **load** · since: **0.1.0**
 
 Server pack VM only. Replaces the default terrain with a pack-driven pipeline (compiled once after freeze). Registered biomes become Voronoi candidates.
 

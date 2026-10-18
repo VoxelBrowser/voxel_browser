@@ -26,6 +26,7 @@
 ---@field pitch number
 ---@field buttons {jump: boolean, sprint: boolean, primary: boolean, secondary: boolean, fly_up: boolean, fly_down: boolean}
 ---@field keybinds table<string, boolean> Only registered keybind names appear.
+---@field dt number Seconds of play this input covers (read-only).
 
 ---@class DeathDecision
 ---@field heal? number New health after respawn.

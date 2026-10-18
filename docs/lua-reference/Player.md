@@ -6,7 +6,7 @@
 
 `Player:get_pos() -> Vec3`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Current position.
 
@@ -20,7 +20,7 @@ local p = player:get_pos() -- {x=, y=, z=}
 
 `Player:set_pos(x, y, z)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.3**
 
 Server pack VM only. Teleports the player: feet position, velocity zeroed, look direction kept. The player's client snaps to it like any server correction. Errors on non-finite coordinates.
 
@@ -38,7 +38,7 @@ player:set_pos(0.5, 90, 0.5)
 
 `Player:get_spawn_pos() -> Vec3`
 
-context: **runtime**
+context: **runtime** · since: **0.1.3**
 
 Server pack VM only. The feet position this player was granted when they joined (where the default respawn puts them).
 
@@ -53,7 +53,7 @@ player:set_pos(s.x, s.y, s.z) -- back to spawn
 
 `Player:set_velocity(x, y, z)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Adds to the player's velocity (m/s).
 
@@ -71,7 +71,7 @@ player:set_velocity(0, 8, 0) -- launch upward
 
 `Player:remove()`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Logged no-op (nothing to remove a player from).
 
@@ -83,7 +83,7 @@ player:remove()
 
 `Player:get_inventory() -> ItemStack[]`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Inventory as a list of `{item=, count=}` (1-based slots).
 
@@ -97,7 +97,7 @@ for slot, stack in ipairs(player:get_inventory()) do print(slot, stack.item, sta
 
 `Player:send_message(text)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Sends a private chat line.
 
@@ -113,7 +113,7 @@ player:send_message("welcome!")
 
 `Player:open_ui(name, ctx)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Opens a client UI screen defined with `ui.define`.
 
@@ -130,7 +130,7 @@ player:open_ui("mypack:shop", { gold = 12 })
 
 `Player:give(stack)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Adds items to the inventory.
 
@@ -146,7 +146,7 @@ player:give{ item = vb.register_block{ name = "mypack:gem" }, count = 3 }
 
 `Player:take(stack) -> boolean`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Removes `count` of `item` across slots, all-or-nothing.
 
@@ -164,7 +164,7 @@ if player:take{ item = 4, count = 2 } then player:send_message("paid") end
 
 `Player:get_name() -> string`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. In-game name.
 
@@ -178,7 +178,7 @@ print(player:get_name())
 
 `Player:get_login() -> Login|nil`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Verified login (frozen table), or `nil` when the server does not authenticate.
 
@@ -193,7 +193,7 @@ if login then print(login.subject) end
 
 `Player:damage(amount, cause)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Reduces health; `cause` is passed to `player_death` handlers.
 
@@ -210,7 +210,7 @@ player:damage(2, "lava")
 
 `Player:get_health() -> {current:`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Current and maximum health, or `nil` if the player is gone.
 
@@ -224,7 +224,7 @@ local h = player:get_health(); print(h.current, h.max)
 
 `Player:set_visual_override(override)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.7**
 
 Server pack VM only. Sets this player's appearance: the same table as `vb.world.spawn`'s `visual_override` (any `EntityVisual` field, usually `layers` for clothing), merged over the `represents = "player"` kind's visual. Every client in range sees it within a tick or two, including clients that come into range later and the player's own third-person view. `nil` clears it. It lasts for the player's session; re-apply it on join.
 
@@ -244,7 +244,7 @@ player:set_visual_override({ layers = {
 
 `Player:get_hunger() -> {current:`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Current and maximum hunger, or `nil` if the player is gone.
 
@@ -258,7 +258,7 @@ local h = player:get_hunger()
 
 `Player:add_hunger(amount)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to `[0, max]`.
 
@@ -270,11 +270,41 @@ Server pack VM only. Restores (positive) or spends (negative) hunger, clamped to
 player:add_hunger(5) -- ate food
 ```
 
+## Player:set_armor
+
+`Player:set_armor(fraction)`
+
+context: **runtime** · since: **0.1.8**
+
+Server pack VM only. Sets the fraction of PvP (punch) damage this player absorbs, clamped to `[0, 0.95]`. Knockback is not reduced. Persists across respawn.
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `fraction` | `number` |  |
+
+```lua
+player:set_armor(0.25) -- takes 25% less punch damage
+```
+
+## Player:get_armor
+
+`Player:get_armor() -> number|nil`
+
+context: **runtime** · since: **0.1.8**
+
+Server pack VM only. The player's PvP armor fraction, or `nil` if the player is gone.
+
+Returns `number|nil`
+
+```lua
+local armor = player:get_armor() or 0
+```
+
 ## Player:break_block
 
 `Player:break_block(x, y, z) -> boolean`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Breaks the block through the full validated pipeline (reach check, hooks, drops).
 
@@ -294,7 +324,7 @@ local ok = player:break_block(10, 64, 10)
 
 `Player:place_block(x, y, z, block) -> boolean`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Places `block` through the validated pipeline.
 
@@ -315,7 +345,7 @@ player:place_block(10, 65, 10, 3)
 
 `Player:punch(block_damage) -> PunchResult`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Throws one punch along the player's look direction (players or blocks, whichever is closer).
 
@@ -334,7 +364,7 @@ if r.broken then print("broke", r.x, r.y, r.z) end
 
 `Player:get_selected_slot() -> integer`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. 1-based selected hotbar slot.
 
@@ -348,7 +378,7 @@ local slot = player:get_selected_slot()
 
 `Player:get_held_item() -> ItemStack|nil`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. The stack in the selected slot, or `nil` if empty.
 

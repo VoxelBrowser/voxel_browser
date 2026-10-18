@@ -120,6 +120,11 @@ class Client(_Base):
     def menu_singleplayer(self, name=None):
         return self.call("menu.singleplayer", **({"name": name} if name else {}))
 
+    def signin(self, choice):
+        """Click a sign-in screen button on a windowed client: "trust" (Continue on the first-use
+        prompt), "browser" or "cancel". The next frame acts on it."""
+        return self.call("signin." + choice)
+
     def type(self, text):
         """Type into the chat box as keyboard characters would (then `key_press("enter")` sends it)."""
         return self.call("type", text=text)

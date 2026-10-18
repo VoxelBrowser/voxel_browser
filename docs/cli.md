@@ -197,13 +197,13 @@ subcommands:
   vb pack dev [dir] [--version v] [--port n] [--no-client]
       host with restart on save and open the client
   vb pack types [dir] [--version v] [--force] [--json]
-      (re)write .vb/lua stubs and .luarc.json
+      (re)write .vb/lua stubs, .luarc.json and ui/.luarc.json
   vb pack info [dir] [--json]
       name, version, engine requirement, file counts
 
 options:
   --json                  init/check/types/info: machine-readable output
-  --force                 init: write into a non-empty directory; types: overwrite .luarc.json
+  --force                 init: write into a non-empty directory; types: overwrite .luarc.json and ui/.luarc.json
   --template <t>          init: minimal (default), ui, worldgen, or base (a copy of the installed content/base)
   --name <id>             init: pack id, [a-z][a-z0-9_]{0,31} (default: the directory name)
   --engine-req <range>    init: engine_version_req to write (default ">=<selected version>")

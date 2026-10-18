@@ -138,6 +138,8 @@ const char *widget_type_name(vb::script::WidgetType t) {
 			return "text";
 		case T::kIcon:
 			return "icon";
+		case T::kSprite:
+			return "sprite";
 	}
 	return "unknown";
 }
@@ -549,6 +551,9 @@ json ClientAutomationEndpoint::state() {
 		{ "selected_slot", app_.selected_hotbar_slot() + 1 },
 		{ "busy_actions", tasks_.size() },
 	};
+	if (app_.app_state() == AppState::kError) {
+		s["error_message"] = app_.error_text();
+	}
 #if defined(VB_WITH_AUTH)
 	if (const auto *si = app_.sign_in_state()) {
 		// What the sign-in screen / re-auth banner would show (docs/automation-protocol.md).
@@ -807,6 +812,13 @@ std::optional<Reply> ClientAutomationEndpoint::command(const Request &req) {
 			app_.menu_connect(a["host"].get<std::string>(), a["port"].get<int>(), name);
 		}
 		return Reply::success(); // the transition shows up in app_state over the next frames
+	}
+	if (req.cmd == "signin.trust" || req.cmd == "signin.browser" || req.cmd == "signin.cancel") {
+		const std::string choice = req.cmd.substr(std::string_view("signin.").size());
+		if (!app_.sign_in_choose(choice)) {
+			return Reply::error("unavailable", "that button is not on the sign-in screen (see the snapshot's 'auth')");
+		}
+		return Reply::success(); // acted on by the next frame, like a click
 	}
 	if (req.cmd == "screenshot") {
 		if (!a.contains("path") || !a["path"].is_string() || a["path"].get<std::string>().empty()) {

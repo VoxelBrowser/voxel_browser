@@ -6,7 +6,7 @@
 
 `vb.db.get(key) -> any`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Reads a value written by `vb.db.set` (JSON round-trip), or `nil`.
 
@@ -24,7 +24,7 @@ local rec = vb.db.get("user:" .. player:get_login().subject)
 
 `vb.db.set(key, value)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Writes a value immediately (no flush step).
 
@@ -41,7 +41,7 @@ vb.db.set("user:alex", { coins = 10 })
 
 `vb.db.delete(key)`
 
-context: **runtime**
+context: **runtime** · since: **0.1.0**
 
 Server pack VM only. Deletes a key. There is no enumeration API.
 

@@ -56,7 +56,8 @@ struct TokenResponse {
 };
 TokenResponse exchange_code(HttpFetcher &http, const OidcEndpoints &ep,
 		const std::string &client_id, const std::string &redirect_uri,
-		const std::string &code, const std::string &verifier);
+		const std::string &code, const std::string &verifier,
+		const std::string &client_secret = {});
 TokenResponse refresh_id_token(HttpFetcher &http, const OidcEndpoints &ep,
 		const std::string &client_id, const std::string &refresh_token);
 
@@ -99,6 +100,9 @@ struct OidcSignInParams {
 	std::shared_ptr<HttpFetcher> http;
 	std::string issuer;
 	std::string client_id;
+	// Only for providers that want one even with PKCE (Google's "Desktop app"
+	// clients); sent in the code exchange. Not a secret for installed apps.
+	std::string client_secret;
 	std::vector<std::string> scopes;
 	std::string nonce; // the server's challenge nonce, put in the auth request
 	std::chrono::milliseconds timeout = std::chrono::minutes(5);
