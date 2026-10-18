@@ -121,8 +121,11 @@ account out at the next join.
   loopback listener (`127.0.0.1` only) and the token is exchanged with PKCE.
 - First time a given server asks for a given IdP, the player is asked whether to trust that
   pairing. Nothing — not even a saved refresh token — is sent to the IdP before they agree.
-- Refresh tokens are cached per `(issuer, client_id)` under the user config dir (`auth/`, owner-only
-  files); *Sign out* in the main menu deletes them. Rejoining within the refresh window opens no browser.
+- Refresh tokens are cached per `(server, issuer, client_id)`: in the OS keychain (macOS Keychain,
+  Windows Credential Manager, or the Secret Service — GNOME Keyring, KWallet, KeePassXC — on Linux),
+  with only metadata in owner-only files under the user config dir (`auth/`). Without a keychain
+  (no libsecret or session bus, or `VB_KEYCHAIN=off`) the token stays in that file. *Sign out* in
+  the main menu deletes both. Rejoining within the refresh window opens no browser.
 - Singleplayer with an auth pack runs the same real sign-in.
 
 ## 7. Development & testing

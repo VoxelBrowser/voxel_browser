@@ -21,13 +21,18 @@ target_link_libraries(vb_auth
 
 if(VB_WITH_AUTH)
   target_sources(vb_auth PRIVATE jwks.cpp verifier.cpp service.cpp signin.cpp
-    oidc_client.cpp firebase.cpp coordinator.cpp session_store.cpp server_glue.cpp)
+    oidc_client.cpp firebase.cpp coordinator.cpp session_store.cpp secret_store.cpp server_glue.cpp)
   target_compile_definitions(vb_auth PUBLIC VB_WITH_AUTH=1)
   target_link_libraries(vb_auth PRIVATE
     MbedTLS::mbedcrypto
     CURL::libcurl
     nlohmann_json::nlohmann_json)
+  # secret_store.cpp: Credential Manager (advapi32) / Keychain (Security) / libsecret (dlopen).
   if(WIN32)
-    target_link_libraries(vb_auth PRIVATE ws2_32 shell32)
+    target_link_libraries(vb_auth PRIVATE ws2_32 shell32 advapi32)
+  elseif(APPLE)
+    target_link_libraries(vb_auth PRIVATE "-framework Security" "-framework CoreFoundation")
+  else()
+    target_link_libraries(vb_auth PRIVATE ${CMAKE_DL_LIBS})
   endif()
 endif()

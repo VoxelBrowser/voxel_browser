@@ -7,10 +7,13 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <thread>
 
@@ -21,6 +24,7 @@
 #include "vb/auth/http.hpp"
 #include "vb/auth/jwt.hpp"
 #include "vb/auth/oidc_client.hpp"
+#include "vb/auth/secret_store.hpp"
 #include "vb/auth/session_store.hpp"
 #include "vb/auth/signin.hpp"
 #include "vb/core/version.hpp"
@@ -428,20 +432,30 @@ TEST_CASE("token file: trimmed, bounded, re-read every time") {
 	const auto path = std::filesystem::temp_directory_path() / "vb_auth_token_file.txt";
 	std::filesystem::remove(path);
 	CHECK_FALSE(read_token_file(path));
-	{ std::ofstream(path) << "  aaa.bbb.ccc \n"; }
+	{
+		std::ofstream(path) << "  aaa.bbb.ccc \n";
+	}
 	CHECK(read_token_file(path) == "aaa.bbb.ccc");
-	{ std::ofstream(path) << "rotated.token.x"; }
+	{
+		std::ofstream(path) << "rotated.token.x";
+	}
 	CHECK(read_token_file(path) == "rotated.token.x");
-	{ std::ofstream(path) << "   \n"; }
+	{
+		std::ofstream(path) << "   \n";
+	}
 	CHECK_FALSE(read_token_file(path));
-	{ std::ofstream(path) << std::string(20000, 'a'); }
+	{
+		std::ofstream(path) << std::string(20000, 'a');
+	}
 	CHECK_FALSE(read_token_file(path));
 	std::filesystem::remove(path);
 }
 
 TEST_CASE("handshake: a token-file provider signs in on the first poll") {
 	const auto path = std::filesystem::temp_directory_path() / "vb_auth_token_file2.txt";
-	{ std::ofstream(path) << "file.id.token"; }
+	{
+		std::ofstream(path) << "file.id.token";
+	}
 	SignInCoordinator::Options o;
 	o.token_file = path;
 	SignInRig rig(std::move(o));
@@ -610,6 +624,103 @@ TEST_CASE("session store: round trip, owner-only file, sign out, trust list") {
 	std::filesystem::remove_all(dir);
 
 	CHECK(label_from_id_token("not a jwt").empty());
+}
+
+// With a SecretBackend (the OS keychain) the refresh token lives there; the
+// file keeps only metadata. A keychain that refuses the token leaves it in the
+// file, and tokens an older client left in files move into the keychain.
+TEST_CASE("session store: refresh tokens go to the OS keychain when there is one") {
+	const auto dir = fresh_dir("keychain");
+	auto secrets = std::make_shared<MemorySecretBackend>();
+	StoredSession s;
+	s.server = "srv:1";
+	s.issuer = kIssuer;
+	s.client_id = "voxel";
+	s.refresh_token = "R-secret";
+	const auto file_text = [&] {
+		std::string all;
+		for (const auto &e : std::filesystem::directory_iterator(dir)) {
+			std::ifstream in(e.path());
+			all += std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		}
+		return all;
+	};
+	{
+		SessionStore store(dir, secrets);
+		CHECK(store.secrets_name() == "memory");
+		REQUIRE(store.save(s));
+		CHECK(secrets->secrets.size() == 1);
+		CHECK(file_text().find("R-secret") == std::string::npos);
+		REQUIRE(store.load("srv:1", kIssuer, "voxel"));
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-secret");
+		CHECK(store.list().size() == 1);
+	}
+	{
+		// Another config dir never sees this one's keychain entry.
+		const auto other = fresh_dir("keychain_other");
+		SessionStore store(other, secrets);
+		CHECK_FALSE(store.load("srv:1", kIssuer, "voxel"));
+		std::filesystem::remove_all(other);
+	}
+	{
+		// The keychain refuses: the token stays in the (0600) file, and the
+		// stale keychain entry is dropped.
+		secrets->fail = true;
+		SessionStore store(dir, secrets);
+		s.refresh_token = "R-file";
+		REQUIRE(store.save(s));
+		CHECK(file_text().find("R-file") != std::string::npos);
+		secrets->fail = false;
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-file");
+	}
+	{
+		// Opening the store with a working keychain moves the file token there.
+		SessionStore store(dir, secrets);
+		CHECK(file_text().find("R-file") == std::string::npos);
+		CHECK(store.load("srv:1", kIssuer, "voxel")->refresh_token == "R-file");
+		store.sign_out("srv:1");
+		CHECK(secrets->secrets.empty());
+		CHECK_FALSE(store.load("srv:1", kIssuer, "voxel"));
+	}
+	{
+		// clear() removes keychain entries too.
+		SessionStore store(dir, secrets);
+		REQUIRE(store.save(s));
+		CHECK(secrets->secrets.size() == 1);
+		store.clear();
+		CHECK(secrets->secrets.empty());
+	}
+	std::filesystem::remove_all(dir);
+}
+
+// The real platform keychain. Opt-in (VB_TEST_REAL_KEYCHAIN=1, set by the
+// macOS and Windows CI legs) so a developer's test run never writes to theirs.
+TEST_CASE("session store: the platform keychain round-trips a token") {
+	const char *opt_in = std::getenv("VB_TEST_REAL_KEYCHAIN");
+	if (opt_in == nullptr || std::string(opt_in) != "1") {
+		return;
+	}
+	auto secrets = os_secret_backend();
+	REQUIRE(secrets);
+	const auto dir = fresh_dir("real_keychain");
+	SessionStore store(dir, secrets);
+	StoredSession s;
+	s.server = "keychain-test:1";
+	s.issuer = kIssuer;
+	s.client_id = "voxel";
+	s.refresh_token = "R-real-" + std::to_string(std::random_device{}());
+	REQUIRE(store.save(s));
+	const auto back = store.load("keychain-test:1", kIssuer, "voxel");
+	REQUIRE(back);
+	CHECK(back->refresh_token == s.refresh_token);
+	for (const auto &e : std::filesystem::directory_iterator(dir)) {
+		std::ifstream in(e.path());
+		const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		CHECK(text.find(s.refresh_token) == std::string::npos); // really in the keychain
+	}
+	store.clear();
+	CHECK_FALSE(store.load("keychain-test:1", kIssuer, "voxel"));
+	std::filesystem::remove_all(dir);
 }
 
 // Saved logins are per server: two servers on the same identity provider

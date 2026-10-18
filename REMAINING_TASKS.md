@@ -261,7 +261,11 @@ Full detail: `remaining_tasks/phase9.md`.
       `fuzz` job. Found and fixed: a wrapping run-length check in
       `rle_decode`/`decode_chunk_payload` (a server could crash clients) and a
       trailing space left by `sanitize_player_name`'s 32-byte cut.
-- [ ] Still open from 9.x: OS keychain for refresh tokens (0600 files today); Firebase
+- [x] OS keychain for refresh tokens (2026-10-18): `vb::auth::os_secret_backend()`
+      (macOS Keychain, Windows Credential Manager, libsecret via dlopen), file
+      fallback, file tokens migrate in; real-keychain test on the macOS/Windows
+      legs and against gnome-keyring on Linux debug x86_64.
+- [ ] Still open from 9.x: Firebase
       `google` sign-in (needs a Google OAuth client id key in `auth.lua`);
       `state.login` in the client UI VM; first-use trust prompt at e2e level;
       manual sign-in runs and builds on Windows/macOS (socket/ShellExecute

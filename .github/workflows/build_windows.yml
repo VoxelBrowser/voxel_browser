@@ -73,6 +73,9 @@ jobs:
       - name: Test
         shell: cmd
         working-directory: build
+        env:
+          # Also exercise the real OS keychain (session store tests; opt-in so local runs never do).
+          VB_TEST_REAL_KEYCHAIN: "1"
         run: ctest --output-on-failure
 
       - name: Set up Python

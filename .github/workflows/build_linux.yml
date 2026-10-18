@@ -90,6 +90,17 @@ jobs:
           TSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/tsan.supp
         run: ctest --output-on-failure
 
+      # The Secret Service keychain backend (libsecret, dlopen'ed) against a real gnome-keyring on a
+      # private session bus. One leg is enough: the code is the same on every Linux.
+      - name: Test the Secret Service keychain
+        if: matrix.build_type == 'debug' && matrix.arch == 'x86_64'
+        shell: bash
+        working-directory: build
+        run: |
+          sudo apt-get install -y gnome-keyring dbus-x11 libsecret-1-0
+          dbus-run-session -- sh -c 'echo ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            VB_TEST_REAL_KEYCHAIN=1 ./vb_tests --test-case="*platform keychain*"'
+
       - name: Set up Python
         if: matrix.build_type == 'release' || matrix.build_type == 'debug'
         uses: actions/setup-python@v5

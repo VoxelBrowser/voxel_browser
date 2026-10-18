@@ -3,6 +3,8 @@
 
 #include "client_app.hpp"
 
+#include "vb/auth/secret_store.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -135,7 +137,8 @@ void ClientApp::begin_connect(bool as_singleplayer) {
 // the same path, so a pack that declares auth.lua signs in for real there too.
 void ClientApp::install_sign_in(vb::net::ClientSession &session, const std::string &server_id) {
 	if (!auth_store) {
-		auth_store = std::make_shared<vb::auth::SessionStore>(vb::core::user_config_dir() / "auth");
+		auth_store = std::make_shared<vb::auth::SessionStore>(vb::core::user_config_dir() / "auth",
+				vb::auth::os_secret_backend());
 	}
 	vb::auth::SignInCoordinator::Options opts;
 	opts.http = std::shared_ptr<vb::auth::HttpFetcher>(vb::auth::make_curl_fetcher());
@@ -285,7 +288,7 @@ void ClientApp::draw_reauth_prompt() {
 void ClientApp::refresh_signed_in_label() {
 	if (!auth_store) {
 		auth_store = std::make_shared<vb::auth::SessionStore>(
-				vb::core::user_config_dir() / "auth");
+				vb::core::user_config_dir() / "auth", vb::auth::os_secret_backend());
 	}
 	signed_in_server_ = menu.address() + ':' + std::to_string(menu.port());
 	const auto sessions = auth_store->list_for(signed_in_server_);
