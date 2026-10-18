@@ -342,7 +342,10 @@ Follow-ups:
 - [x] `vb.noise.value`/`cellular` accept a number or `{ frequency = n }` (2026-10-18; other types
       raise). kitchen_sink's fbm sources are now `value(1)` (same terrain as before: the table was
       ignored, and fbm multiplies the frequency); its standalone cellular layer now really is 1/24.
-- [ ] `vb pack dev` is untested end to end (needs a real server + client); only argument handling is covered.
+- [x] `vb pack dev` end to end (2026-10-18): `tests/e2e/test_pack_dev.py` links the build as a `vb`
+      version, runs `vb pack dev --no-client`, joins its server, saves a new Lua file into the pack and
+      checks a fresh client gets the reloaded pack's greeting. The e2e CI job now builds `vb`
+      (`VB_BUILD_CLI=ON`). Not covered: the client `vb pack dev` opens itself (needs a window).
 
 ---
 

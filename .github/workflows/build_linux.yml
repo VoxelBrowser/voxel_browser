@@ -198,6 +198,7 @@ jobs:
       # ASan + UBSan: real two-process shutdown is exactly where leaks and teardown
       # bugs show up. NET/LUA/COMPRESSION: a real UDP server, the base pack's
       # mechanics and UI, and asset sync (how clients receive the pack's UI scripts).
+      # CLI: test_pack_dev.py drives the real `vb pack dev` against this build.
       - name: Configure
         shell: bash
         run: |
@@ -210,7 +211,7 @@ jobs:
             -DVB_WITH_REPLICATION=ON \
             -DVB_WITH_COMPRESSION=ON \
             -DVB_WITH_AUTOMATION=ON \
-            -DVB_BUILD_CLI=OFF \
+            -DVB_BUILD_CLI=ON \
             -DVB_ENABLE_ASAN=ON -DVB_ENABLE_UBSAN=ON
 
       # CMake silently skips registering the e2e test when its python can't import pytest. A
