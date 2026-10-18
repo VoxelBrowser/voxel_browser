@@ -1993,16 +1993,39 @@ void PackRuntime::Impl::install_bindings() {
 		t["value"] = value;
 		return t;
 	};
-	noise_tbl["value"] = [this](sol::optional<double> frequency) {
+	// value/cellular take the frequency as a number or as `{ frequency = n }`
+	// (the table form used to be silently ignored, leaving 1.0).
+	const auto leaf_frequency = [](const char *fn, const sol::object &arg) -> double {
+		switch (arg.get_type()) {
+			case sol::type::lua_nil:
+			case sol::type::none:
+				return 1.0;
+			case sol::type::number:
+				return arg.as<double>();
+			case sol::type::table: {
+				const sol::object f = arg.as<sol::table>()["frequency"];
+				if (f.get_type() == sol::type::lua_nil) {
+					return 1.0;
+				}
+				if (f.get_type() != sol::type::number) {
+					throw sol::error(std::string(fn) + ": 'frequency' must be a number");
+				}
+				return f.as<double>();
+			}
+			default:
+				throw sol::error(std::string(fn) + ": expected a frequency number or { frequency = n }");
+		}
+	};
+	noise_tbl["value"] = [this, leaf_frequency](sol::object arg) {
 		sol::table t = lua_state().create_table();
 		t["type"] = "value";
-		t["frequency"] = frequency.value_or(1.0);
+		t["frequency"] = leaf_frequency("vb.noise.value", arg);
 		return t;
 	};
-	noise_tbl["cellular"] = [this](sol::optional<double> frequency) {
+	noise_tbl["cellular"] = [this, leaf_frequency](sol::object arg) {
 		sol::table t = lua_state().create_table();
 		t["type"] = "cellular";
-		t["frequency"] = frequency.value_or(1.0);
+		t["frequency"] = leaf_frequency("vb.noise.cellular", arg);
 		return t;
 	};
 	noise_tbl["fbm"] = [this](sol::table def) {

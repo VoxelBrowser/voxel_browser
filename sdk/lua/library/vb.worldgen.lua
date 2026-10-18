@@ -16,20 +16,21 @@ vb.noise = {}
 function vb.noise.constant(value) end
 
 ---@vb context load
----Server pack VM only. Value noise.
+---Server pack VM only. Value noise. The frequency may also be given as `{ frequency = n }`.
+---Inside `vb.noise.fbm` leave it at 1: the fbm node's own `frequency` multiplies it.
 ---```lua
----local n = vb.noise.value(0.01)
+---local n = vb.noise.value(0.01) -- same as vb.noise.value{ frequency = 0.01 }
 ---```
----@param frequency? number Default 1.0.
+---@param frequency? number|{frequency?: number} Default 1.0.
 ---@return NoiseNode
 function vb.noise.value(frequency) end
 
 ---@vb context load
----Server pack VM only. Cellular (Worley) noise.
+---Server pack VM only. Cellular (Worley) noise. The frequency may also be given as `{ frequency = n }`.
 ---```lua
 ---local cells = vb.noise.cellular(0.02)
 ---```
----@param frequency? number Default 1.0.
+---@param frequency? number|{frequency?: number} Default 1.0.
 ---@return NoiseNode
 function vb.noise.cellular(frequency) end
 

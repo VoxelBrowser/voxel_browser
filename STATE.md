@@ -467,8 +467,8 @@ or `REMAINING_TASKS.md`/`ARCHITECTURE_SPEC.md` for design-level context.
   `S2CServerInfo{...}` in tests must now list it (or use member assignment).
 - `src/script/lua_global_scan.c` reads Lua 5.4 internals (`#error` on another version). Bumping the pinned Lua
   means re-checking it.
-- `vb.noise.value`/`cellular` take a **number** (frequency); a table argument is silently ignored (sol2
-  `optional<double>`), which is what `content/examples/kitchen_sink/worldgen.lua` does today.
+- `vb.noise.value`/`cellular` take a number **or** `{ frequency = n }` (since 2026-10-18; the table used to
+  be silently ignored). Frequencies multiply down the graph: an fbm's `source` belongs at 1.
 - The asset manifest skips dot-entries and pack-root README.md/AGENTS.md; a pack file that must reach clients
   cannot start with a dot.
 - Local tooling: CI's clang-format is the newest pip release (23.x); Ubuntu's 18.x disagrees on existing

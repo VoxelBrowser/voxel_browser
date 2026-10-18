@@ -329,8 +329,9 @@ Follow-ups:
 - [ ] `--check-pack` warnings: block without a texture, unknown keys in `def` tables; `since`-aware
       "API newer than your `engine_version_req`" warning (§3.7 "Later").
 - [ ] Singleplayer should show an `engine_version_req` mismatch in the main menu (today: stderr + base set).
-- [ ] `vb.noise.value{frequency=...}` ignores a table argument (the binding takes a number, so
-      `content/examples/kitchen_sink` silently gets the default); make it accept both or fix the example.
+- [x] `vb.noise.value`/`cellular` accept a number or `{ frequency = n }` (2026-10-18; other types
+      raise). kitchen_sink's fbm sources are now `value(1)` (same terrain as before: the table was
+      ignored, and fbm multiplies the frequency); its standalone cellular layer now really is 1/24.
 - [ ] `vb pack dev` is untested end to end (needs a real server + client); only argument handling is covered.
 
 ---

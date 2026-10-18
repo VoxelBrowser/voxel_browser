@@ -178,8 +178,8 @@ One line per function. Click a name for its parameters and example. Narrative/de
 [Full reference](vb.noise.md)
 
 - [`vb.noise.constant(value) -> NoiseNode`](vb.noise.md#vb-noise-constant) — Server pack VM only. Constant noise node.
-- [`vb.noise.value(frequency) -> NoiseNode`](vb.noise.md#vb-noise-value) — Server pack VM only. Value noise.
-- [`vb.noise.cellular(frequency) -> NoiseNode`](vb.noise.md#vb-noise-cellular) — Server pack VM only. Cellular (Worley) noise.
+- [`vb.noise.value(frequency) -> NoiseNode`](vb.noise.md#vb-noise-value) — Server pack VM only. Value noise. The frequency may also be given as `{ frequency = n }`. Inside `vb.noise.fbm` leave it at 1: the fbm node's own `frequency` multiplies it.
+- [`vb.noise.cellular(frequency) -> NoiseNode`](vb.noise.md#vb-noise-cellular) — Server pack VM only. Cellular (Worley) noise. The frequency may also be given as `{ frequency = n }`.
 - [`vb.noise.fbm(def) -> NoiseNode`](vb.noise.md#vb-noise-fbm) — Server pack VM only. Fractal Brownian motion over a source node.
 - [`vb.noise.remap(def) -> NoiseNode`](vb.noise.md#vb-noise-remap) — Server pack VM only. Linearly remaps a node's range.
 - [`vb.noise.combine(def) -> NoiseNode`](vb.noise.md#vb-noise-combine) — Server pack VM only. Combines two nodes.
