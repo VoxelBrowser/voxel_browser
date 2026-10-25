@@ -144,3 +144,17 @@
    `acting` new — not yet wired on the wire, see `REMAINING_TASKS.md` 3.5).
    Deferred to implementation time: exact clip-name base set beyond the priority
    list itself, and whether a blob-shadow decal ships alongside v1 or later.
+8. **In-process server: product mode vs. diagnostic.** `--singleplayer` (the
+   `Singleplayer` struct in `src/client/session_host.hpp`, an in-process
+   `ServerSession` over `LoopbackNetwork`) was exposed as "Play Singleplayer".
+   **Direction (2026-10-25): diagnostic, not a play mode.** The product is
+   multiplayer-first; new users come in through `vb`, and `vb pack dev` hosts a
+   real dedicated server joined over GNS, so nobody needs the in-process path to
+   play or to author packs. Its real value is isolating netcode — rendering,
+   worldgen, pack Lua, physics, persistence and automation against the same
+   server code with no GNS, asset sync or compression negotiation — which is
+   also exactly what it can't vouch for. Plan (`REMAINING_TASKS.md` Phase 11):
+   drop the menu button, rename the flag (proposed `--loopback`, keeping
+   `--singleplayer` as a deprecated alias), document what it doesn't cover,
+   and later share the server bootstrap with `src/server/main.cpp`. Name still
+   pending sign-off.

@@ -349,6 +349,61 @@ Follow-ups:
 
 ---
 
+## Phase 11 — Singleplayer → loopback diagnostic — planned (2026-10-25)
+
+> User-requested: "singleplayer" reads as a play mode, but the product is
+> multiplayer-first and nobody needs it to play — new users come in through
+> `vb`, and `vb pack dev` hosts a real dedicated server joined over GNS
+> (`src/cli/pack.cpp` `cmd_dev`). What the in-process path is actually good
+> for is **isolating netcode**: rendering/meshing, worldgen, pack Lua,
+> physics, persistence and automation run against the same `ServerSession`
+> over `LoopbackNetwork`, with no GNS, asset sync or compression negotiation.
+> So: hide it from the UI, rename the flag after what it does, keep an alias.
+> Pending user sign-off on the name (proposed `--loopback`, runner-up
+> `--no-net`) and on 11.2 option (a) vs (b).
+
+- [ ] 11.1 **Flag + alias.** `src/client/main.cpp`: add `--loopback`;
+      `--singleplayer` stays as a deprecated alias printing a one-line
+      notice. Move it to a "diagnostics" group in `--help`, saying it bypasses
+      GNS/asset sync/compression negotiation. Re-word the "singleplayer:"
+      help of `--content-pack`/`--world-dir`/`--insecure-skip-auth`/
+      `--ignore-engine-req` and the `--net-sim` refusal. Keep the
+      `joined singleplayer` log line (`singleplayer_smoke`'s regex) or change
+      both together.
+- [ ] 11.2 **Remove from the UI.** Delete "Play Singleplayer"
+      (`src/render/main_menu.cpp:155`). The automation command
+      `menu.singleplayer` (`automation_endpoint.cpp`) →
+      `ClientApp::menu_singleplayer`, the `Recorder` hook and
+      `tests/e2e/test_windowed.py`'s engine-req test all go through it.
+      (a) *preferred*: keep the automation entry point, rename it
+      `menu.loopback` with the old name as alias — only the button goes;
+      (b) drop it and rewrite the test to launch with the flag. Re-word the
+      now CLI-only status strings in `client_app.cpp` ("Starting singleplayer
+      world...", "Could not start singleplayer").
+- [ ] 11.3 **Docs.** `README.md`, `docs/cli.md` + `src/cli/help.cpp`
+      (`vb launch -- --singleplayer`), `docs/automation-protocol.md`,
+      `docs/e2e-automation.md`, `CONTRIBUTING.md`,
+      `docs/lua-reference/vb.config.md`, kitchen_sink `ui/status.lua`
+      comment, `ARCHITECTURE_SPEC.md` §3/§18 #8. Add a "what loopback does
+      not cover" note: transport, asset sync, compression flags, and the
+      known gap that it never installs the pack keybind registry
+      (`docs/e2e-automation.md` item 11). Leave changelogs/history alone.
+- [ ] 11.4 *(optional, separate)* World dir: `layout.singleplayer_world_dir()`
+      / `singleplayer-<pack>` (`src/cli/commands.cpp`) is stored data —
+      renaming needs a migration or old-path fallback, else saved worlds are
+      orphaned. Deferred; not user-visible.
+- [ ] 11.5 *(follow-up PR)* Share one server bootstrap between
+      `src/server/main.cpp` and `Singleplayer` (`session_host.hpp`
+      "mirrors main.cpp" params, region store, pack/registry checks) so the
+      diagnostic can't drift from the real server — the keybind gap shows it
+      already has.
+
+Not renamed: internal identifiers (`Singleplayer`, `kSingleplayer*`,
+`connecting_singleplayer`, e2e `singleplayer=` kwarg) — churn without user
+benefit; a comment on `Singleplayer` notes it backs `--loopback`.
+
+---
+
 ## Cross-Cutting / Continuous
 
 Full detail: `remaining_tasks/cross_cutting.md`.

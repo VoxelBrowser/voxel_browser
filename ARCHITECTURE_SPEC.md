@@ -69,6 +69,8 @@ it, with a separate sandboxed Lua VM driving UI only.
 **No separate singleplayer code path** — the same binary hosts an integrated
 server on `localhost` for singleplayer and connects to it through the normal
 socket path.
+Planned (Phase 11): this in-process path becomes a hidden diagnostic,
+`--loopback` (alias `--singleplayer`), for isolating netcode — not a play mode.
 
 Repo layout: `inc/vb/<module>/` mirrors `src/<module>/`
 (`core/world/worldgen/ecs/net/replication/assetsync/script/protocol/render`);
@@ -476,6 +478,7 @@ servers to the extent practical (no code exec, no arbitrary FS writes).
 | 5 | Persistence: region file format | **Resolved 2026-09-25: flat files, not LMDB** (reversing the 2026-09-17 direction note after implementation review) — `vb::world::RegionStore` groups chunks into one file per X/Z region (Y ungrouped), reusing the existing palette+RLE chunk codec as-is, no new FetchContent dependency. Only edited chunks (`Chunk::revision() > 0`) are ever written. See `REMAINING_TASKS.md`'s Phase 7.6 for the full writeup. LZ4 framing of region-file payloads (format version 1 -> 2) and `--singleplayer`'s integrated server wiring to a real `RegionStore` both resolved 2026-09-28 — no open sub-item left |
 | 6 | Account/auth: `auth_mode = none \| token` | **Direction revised 2026-10-05:** a pack-level `auth.lua` declares an external identity provider (OIDC/Keycloak/Firebase); its presence makes engine-verified auth mandatory before world load, and scripts read `player:get_login()` (`nil` = no auth). Planned as Phase 9 — `architecture_spec/auth.md`. The 2026-09-17 note (engine owns no auth; packs build login on `vb.db`) is superseded for mandatory auth; `vb.db` logins still work as pack-level identity |
 | 7 | Entity visual presentation: 3D models vs. 2D sprites | **Resolved 2026-09-11: Don't Starve-style billboards** — full design in §10 above |
+| 8 | In-process server: product mode ("singleplayer") vs. diagnostic | **Direction 2026-10-25: diagnostic.** Removed from the menu, flag renamed (proposed `--loopback`, `--singleplayer` alias) — the product is multiplayer-first and `vb pack dev` already hosts a real server. Plan: `REMAINING_TASKS.md` Phase 11 |
 
 Full resolution write-ups and reasoning for every row:
 `architecture_spec/open-questions.md`.
