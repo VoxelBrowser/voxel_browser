@@ -191,3 +191,58 @@ window-less, script-fed implementation used by unit tests and, later, the
 dev-only e2e automation (`docs/e2e-automation.md`). The seam is ordinary
 engine code and ships in production; only the automation driver is gated.
 
+
+### 11.6 Engine menu screens (planned 2026-10-25, Phase 12)
+
+The non-gameplay screens (`vb::render::MainMenu`, `src/render/main_menu.cpp`)
+are engine-drawn, never pack content. Phase 12 redesigns them as a
+search-engine-style home page; the approved mockup is the design canvas
+linked from `remaining_tasks/phase12.md`.
+
+**Backdrop.** Every non-gameplay screen (main, settings, keybindings,
+connecting, sign-in, error, loading) draws the same backdrop first: an
+engine-owned 16×16 dirt texture, tiled at 4× with point filtering, under a
+flat black scrim at 55% opacity. The texture is a copy of
+`content/base/textures/dirt.png` baked into the client binary
+(`vb_embed_files`, `cmake/EmbedFiles.cmake`), so the menu never depends on a
+pack being present. With the scrim, the brightest dirt pixel (156,116,86)
+lands near (70,52,39), so white text is ~11:1. Panels drawn over the backdrop
+are ~85% opaque dark brown (`#140E0A`) with a 1 px 14%-white border, so
+contrast never depends on which texels sit behind a widget.
+
+**Type.** Two OFL fonts embedded the same way: Pixelify Sans (title only,
+"Voxel Browser") and Inter (all other text), loaded once with `LoadFontFromMemory`
+and set as raygui's font. Licence texts ship next to the binary.
+
+**Main screen** (top to bottom, centred):
+- "Voxel Browser" title (92 px at 1280×720, scaled down with the window).
+- One address field (`host`, `host:port`, `[ipv6]:port`; port defaults to
+  27015) on an opaque light pill (`#F4F1EC`, dark text ~15:1) with a
+  **Continue** button beside it (`#7BC35A`, dark text ~8:1). Enter in the
+  field = Continue. Replaces the separate address/port boxes.
+- "Recent servers" panel: the 3 most recent entries of `recent_servers`, plus
+  an "All history in Settings" link. Clicking an entry (or the link) opens
+  Settings › History with that entry highlighted and scrolled into view; it
+  does not connect or fill the field. Hidden when the list is empty.
+- Bottom-left: **Settings**. Top-right: the Phase 9.6 "Signed in to …" chip
+  with Sign out (bottom-right at the minimum window size, where it would hit
+  the title).
+- No Singleplayer button (Phase 11.2: loopback is a CLI-only diagnostic) and
+  no Quit button (closing the window exits).
+
+**Settings** is one panel with a section list on the left and Back / Save at
+the bottom:
+- *General*: **Default player name** (`client.toml` `player_name`; moved off
+  the main screen), asset cache size.
+- *Video*: window size, V-Sync, FOV, render distance.
+- *Controls*: mouse sensitivity, "Keybindings…" (the existing screen).
+- *History*: every `recent_servers` entry, newest first, each with Connect
+  and Remove, plus Clear history. Connect from here is the only one-click
+  way to join a past server.
+
+**Connecting** keeps its status text, optional asset-sync progress bar and
+Cancel, now in a backdrop panel under a smaller title. Error, sign-in and
+loading screens get the backdrop and panel styling without layout changes.
+
+All layouts must fit the enforced 720×360 minimum window
+(`kMinWindowWidth`/`kMinWindowHeight`) without clipping.

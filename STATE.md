@@ -94,6 +94,10 @@ content-only (e.g. the user explicitly asks for a content-pack feature).
   feature-branch push alone triggers nothing — open a PR, push to a
   `*-workflow` branch, or dispatch manually). Windows (Winsock code) and
   macOS are unbuilt.
+- **Main menu redesign (Phase 12) planned** 2026-10-25, not started: design
+  `architecture_spec/rendering.md` §11.6, plan `remaining_tasks/phase12.md`.
+  Gotcha: `test_connecting_panel_fits_on_screen` assumes the flat (18,18,22)
+  clear colour, which the dirt backdrop replaces (12.6).
 - **In-engine auth (Phase 9) landed** 2026-10-05/06 — see
   `REMAINING_TASKS.md` Phase 9 for what is still open, `docs/auth.md` for
   operators.
@@ -347,7 +351,7 @@ Other undecided:
   `LoopbackNetwork`/`ServerSession`/`ClientSession` directly).
   Direction (2026-10-25): it's a netcode-isolation diagnostic, not a play
   mode — Phase 11 hides it from the menu and renames the flag (proposed
-  `--loopback`); name and automation-alias choice still pending.
+  `--loopback`); name pending, `menu.singleplayer` alias kept (11.2 (a)).
 
 ---
 

@@ -333,6 +333,11 @@ debug overlay) → present. Target 60 FPS, decoupled from the 20 Hz tick.
 Full billboard/spritesheet design (frame-size variant table, per-kind
 `visual` schema, per-instance override mechanics): `architecture_spec/rendering.md`.
 
+**Menu screens (Phase 12, planned):** search-engine-style home (title,
+address bar + Continue, 3 recent servers that open Settings › History,
+Settings bottom-left) over a tiled dirt backdrop on every non-gameplay
+screen; design in `architecture_spec/rendering.md` §11.6.
+
 ---
 
 ## 11. Physics
@@ -387,7 +392,8 @@ same commit as any message change.**
 
 **Client** (`client.toml`, local only, never synced): window size, vsync,
 FOV, render distance (clamped to server), mouse sensitivity, keybindings,
-asset cache size cap, last-connected servers list.
+asset cache size cap, default player name, server history (newest
+first; the menu shows 3, Settings › History all).
 
 Installing, versioning and hosting through the user-scoped `vb` developer
 CLI (install layout under the per-user data/config dirs, server instances,

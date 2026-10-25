@@ -360,7 +360,7 @@ Follow-ups:
 > over `LoopbackNetwork`, with no GNS, asset sync or compression negotiation.
 > So: hide it from the UI, rename the flag after what it does, keep an alias.
 > Pending user sign-off on the name (proposed `--loopback`, runner-up
-> `--no-net`) and on 11.2 option (a) vs (b).
+> `--no-net`); 11.2 option (a) agreed 2026-10-25 (Phase 12 planning).
 
 - [ ] 11.1 **Flag + alias.** `src/client/main.cpp`: add `--loopback`;
       `--singleplayer` stays as a deprecated alias printing a one-line
@@ -371,7 +371,8 @@ Follow-ups:
       `joined singleplayer` log line (`singleplayer_smoke`'s regex) or change
       both together.
 - [ ] 11.2 **Remove from the UI.** Delete "Play Singleplayer"
-      (`src/render/main_menu.cpp:155`). The automation command
+      (`src/render/main_menu.cpp:155`; done as part of Phase 12.5 if that
+      lands first). The automation command
       `menu.singleplayer` (`automation_endpoint.cpp`) →
       `ClientApp::menu_singleplayer`, the `Recorder` hook and
       `tests/e2e/test_windowed.py`'s engine-req test all go through it.
@@ -401,6 +402,25 @@ Follow-ups:
 Not renamed: internal identifiers (`Singleplayer`, `kSingleplayer*`,
 `connecting_singleplayer`, e2e `singleplayer=` kwarg) — churn without user
 benefit; a comment on `Singleplayer` notes it backs `--loopback`.
+
+---
+
+## Phase 12 — Main menu redesign — planned (2026-10-25)
+
+> User-requested: search-engine-style home page — "Voxel Browser" title,
+> address bar + Continue, 3 recent servers (click → Settings › History),
+> Settings bottom-left, dirt backdrop on every non-gameplay screen; player
+> name → Settings as default player name; no Singleplayer/Quit buttons.
+> Design: `architecture_spec/rendering.md` §11.6. Full plan and mockup link:
+> `remaining_tasks/phase12.md`.
+
+- [ ] 12.1 backdrop (embedded dirt texture + scrim) and fonts on all screens
+- [ ] 12.2 main screen: title, address field + Continue, recent ×3, Settings
+- [ ] 12.3 Settings sections (General/Video/Controls/History), history cap 50
+- [ ] 12.4 `player_name` written only by Settings; CLI/automation = override
+- [ ] 12.5 remove Singleplayer (with 11.2) and Quit buttons
+- [ ] 12.6 tests (connecting-panel e2e compares against the backdrop)
+- [ ] 12.7 docs
 
 ---
 
