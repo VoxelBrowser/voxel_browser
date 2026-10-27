@@ -511,8 +511,7 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 			return r;
 		}
 	};
-	SignInCoordinator::Options o;
-	SignInRig rig(std::move(o));
+	SignInRig rig{ SignInCoordinator::Options{} };
 	// Swap in the form-aware fake (the rig's coordinator was built with FakeIdp).
 	SignInCoordinator::Options o2;
 	o2.http = std::make_shared<Idp>();
@@ -635,8 +634,7 @@ TEST_CASE("coordinator: firebase google sign-in goes through Google, then signIn
 }
 
 TEST_CASE("coordinator: cancel ends the join with 'sign-in cancelled'") {
-	SignInCoordinator::Options o;
-	SignInRig rig(std::move(o));
+	SignInRig rig{ SignInCoordinator::Options{} };
 	rig.deliver_challenge("keycloak");
 	CHECK(rig.coord->supports_browser());
 	rig.coord->cancel();
