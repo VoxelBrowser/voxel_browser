@@ -117,8 +117,10 @@ class Client(_Base):
         """Click "Connect" on the main menu (the transition shows up in `app_state`)."""
         return self.call("menu.connect", host=host, port=port, **({"name": name} if name else {}))
 
-    def menu_singleplayer(self, name=None):
-        return self.call("menu.singleplayer", **({"name": name} if name else {}))
+    def menu_loopback(self, name=None):
+        return self.call("menu.loopback", **({"name": name} if name else {}))
+
+    menu_singleplayer = menu_loopback  # old name
 
     def signin(self, choice):
         """Click a sign-in screen button on a windowed client: "trust" (Continue on the first-use

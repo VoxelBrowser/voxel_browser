@@ -127,7 +127,7 @@ class ClientFactory:
                        VB_CONNECT_TIMEOUT_SECONDS=str(int(10 * timeout_scale())))
             argv = [str(self.client_bin)] + ([] if windowed else ["--headless"])
             if singleplayer:
-                argv += ["--singleplayer", "--content-pack", str(singleplayer), "--world-dir",
+                argv += ["--loopback", "--content-pack", str(singleplayer), "--world-dir",
                          str(home_dir / "world")]
             elif not via_menu:  # --server connects straight away; without it a windowed client opens on the menu
                 argv += ["--server", host, "--port", str(port or self.server.port)]

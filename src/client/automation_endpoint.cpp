@@ -792,7 +792,7 @@ std::optional<Reply> ClientAutomationEndpoint::command(const Request &req) {
 	}
 
 	// --- windowed-only: menu, screenshots, typing ----------------------------------
-	if (req.cmd == "menu.set_name" || req.cmd == "menu.connect" || req.cmd == "menu.singleplayer") {
+	if (req.cmd == "menu.set_name" || req.cmd == "menu.connect" || req.cmd == "menu.loopback" || req.cmd == "menu.singleplayer") {
 		if (!app_.menu_active()) {
 			return Reply::error("not_in_menu", "the client is not on the main menu",
 					json{ { "app_state", ClientApp::app_state_name(app_.app_state()) } });
@@ -803,7 +803,7 @@ std::optional<Reply> ClientAutomationEndpoint::command(const Request &req) {
 				return bad("menu.set_name: needs non-empty string 'name'");
 			}
 			app_.menu_set_name(name);
-		} else if (req.cmd == "menu.singleplayer") {
+		} else if (req.cmd == "menu.loopback" || req.cmd == "menu.singleplayer") {
 			app_.menu_singleplayer(name);
 		} else {
 			if (!a.contains("host") || !a["host"].is_string() || !a.contains("port") || !a["port"].is_number_integer()) {

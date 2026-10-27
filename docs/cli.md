@@ -133,7 +133,7 @@ vb launch [--version <v>] [--connect host[:port]] [-- client args...]
 
 start the client
 
-Starts the client of a version in the foreground with the user's shared settings and a per-user singleplayer world directory. Everything after `--` goes to the client.
+Starts the client of a version in the foreground with the user's shared settings and a per-user loopback world directory. Everything after `--` goes to the client.
 
 options:
   --version <v>           which installed version
@@ -141,7 +141,7 @@ options:
 
 examples:
   vb launch --connect localhost:7777    # join a local server
-  vb launch -- --singleplayer    # start singleplayer directly
+  vb launch -- --loopback        # start the in-process loopback diagnostic
 ```
 
 ## `vb link`

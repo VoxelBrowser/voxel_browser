@@ -349,7 +349,7 @@ Follow-ups:
 
 ---
 
-## Phase 11 — Singleplayer → loopback diagnostic — planned (2026-10-25)
+## Phase 11 — Singleplayer → loopback diagnostic — 11.1–11.3 done (2026-10-27)
 
 > User-requested: "singleplayer" reads as a play mode, but the product is
 > multiplayer-first and nobody needs it to play — new users come in through
@@ -362,7 +362,7 @@ Follow-ups:
 > Pending user sign-off on the name (proposed `--loopback`, runner-up
 > `--no-net`); 11.2 option (a) agreed 2026-10-25 (Phase 12 planning).
 
-- [ ] 11.1 **Flag + alias.** `src/client/main.cpp`: add `--loopback`;
+- [x] 11.1 **Flag + alias.** `src/client/main.cpp`: add `--loopback`;
       `--singleplayer` stays as a deprecated alias printing a one-line
       notice. Move it to a "diagnostics" group in `--help`, saying it bypasses
       GNS/asset sync/compression negotiation. Re-word the "singleplayer:"
@@ -370,18 +370,18 @@ Follow-ups:
       `--ignore-engine-req` and the `--net-sim` refusal. Keep the
       `joined singleplayer` log line (`singleplayer_smoke`'s regex) or change
       both together.
-- [ ] 11.2 **Remove from the UI.** Delete "Play Singleplayer"
+- [x] 11.2 **Remove from the UI.** Delete "Play Singleplayer"
       (`src/render/main_menu.cpp:155`; done as part of Phase 12.5 if that
       lands first). The automation command
       `menu.singleplayer` (`automation_endpoint.cpp`) →
       `ClientApp::menu_singleplayer`, the `Recorder` hook and
       `tests/e2e/test_windowed.py`'s engine-req test all go through it.
-      (a) *preferred*: keep the automation entry point, rename it
+      (a) *done*: keep the automation entry point, rename it
       `menu.loopback` with the old name as alias — only the button goes;
       (b) drop it and rewrite the test to launch with the flag. Re-word the
       now CLI-only status strings in `client_app.cpp` ("Starting singleplayer
       world...", "Could not start singleplayer").
-- [ ] 11.3 **Docs.** `README.md`, `docs/cli.md` + `src/cli/help.cpp`
+- [x] 11.3 **Docs.** `README.md`, `docs/cli.md` + `src/cli/help.cpp`
       (`vb launch -- --singleplayer`), `docs/automation-protocol.md`,
       `docs/e2e-automation.md`, `CONTRIBUTING.md`,
       `docs/lua-reference/vb.config.md`, kitchen_sink `ui/status.lua`

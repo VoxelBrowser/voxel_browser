@@ -87,7 +87,7 @@ inline vb::net::HandshakeServerConfig sp_server_config(std::uint64_t seed, int v
 	(void)auth;
 #endif
 	c.pack_name = "base";
-	c.motd = "integrated singleplayer";
+	c.motd = "integrated loopback";
 	c.world_seed = seed;
 	c.view_distance = static_cast<std::uint32_t>(view_distance);
 	return c;
@@ -180,7 +180,7 @@ inline vb::script::PackRuntime make_singleplayer_pack_runtime(
 	// like a pack that failed to load, never to an unauthenticated pack.
 	bool pack_blocked = false;
 	// pack.toml's engine_version_req is enforced here too (dev-experience.md §3.7), like the
-	// dedicated server's refusal: singleplayer does not start, and the menu says why.
+	// dedicated server's refusal: singleplayer does not start, and the screen says why.
 	{
 		const vb::core::EngineReqCheck req = vb::script::check_pack_engine_req(
 				vb::script::read_pack_manifest(kSingleplayerContentPack), vb::core::engine_version());
@@ -188,7 +188,7 @@ inline vb::script::PackRuntime make_singleplayer_pack_runtime(
 			std::cerr << "client: *** --ignore-engine-req: " << req.message
 					  << " (continuing; development only) ***\n";
 		} else if (!req.ok) {
-			refused = "Can't start singleplayer: " + req.message +
+			refused = "Can't start loopback session: " + req.message +
 					". Install a matching version (vb install / vb use) or pick another pack.";
 			std::cerr << "client: " << refused << '\n';
 			pack_blocked = true;
@@ -374,6 +374,7 @@ inline vb::net::HandshakeServerHost make_singleplayer_host(
 // singleplayer now loads and runs `content/base` exactly like a real
 // dedicated server does (chat, crafting, item drops, custom blocks), just
 // over a loopback transport instead of real UDP.
+// Backs the `--loopback` diagnostic (formerly `--singleplayer`); internal names kept.
 struct Singleplayer {
 	vb::net::LoopbackNetwork net;
 	vb::world::BlockRegistry registry = vb::world::BlockRegistry::base();

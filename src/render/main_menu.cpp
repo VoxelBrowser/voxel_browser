@@ -152,10 +152,6 @@ MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_
 		result.connect = true;
 	}
 	y += 40.0f;
-	if (GuiButton(Rectangle{ x, y, field_w, 32.0f }, "Play Singleplayer")) {
-		result.singleplayer = true;
-	}
-	y += 40.0f;
 
 	if (!recent_servers.empty()) {
 		GuiLabel(Rectangle{ x, y, field_w, 20.0f }, "Recent servers");

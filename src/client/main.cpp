@@ -3,7 +3,7 @@
 // Phase 5.3: an engine-level main menu (raylib window always opens first) —
 // connect screen, connecting/progress screen, error screen, settings screen,
 // recent servers — wraps the streamed/meshed voxel gameplay from earlier
-// phases. `--singleplayer` runs an in-process server (worldgen + replication)
+// phases. `--loopback` (alias `--singleplayer`) runs an in-process server (worldgen + replication)
 // over a loopback transport and joins it (spec §3 — one code path for single-
 // and multiplayer). `--headless` skips the menu entirely and connects
 // immediately from CLI args/config (CI and integration tests depend on this
@@ -84,10 +84,9 @@ void print_usage() {
 				 "  --fov <deg>       vertical field of view override\n"
 				 "  --render-distance <n>  view distance override (chunks)\n"
 				 "  --asset-cache-dir <path>  asset cache directory override\n"
-				 "  --singleplayer    run an in-process server and join it\n"
-				 "  --content-pack <dir>  singleplayer: content pack to load (default content/base,\n"
+				 "  --content-pack <dir>  --loopback: content pack to load (default content/base,\n"
 				 "                        else <exe dir>/content/base)\n"
-				 "  --world-dir <dir>     singleplayer: where the world is saved (default world_singleplayer)\n"
+				 "  --world-dir <dir>     --loopback: where the world is saved (default world_singleplayer)\n"
 				 "  --headless        run without a window (no rendering, skips the menu)\n"
 				 "  --frames <n>      headless: run n frames then exit (default 3)\n"
 #if defined(VB_WITH_AUTOMATION)
@@ -101,13 +100,19 @@ void print_usage() {
 				 "  --auth-token-file <file>  sign in with the ID token in this file instead of the UI (dev builds only)\n"
 #endif
 #if !defined(VB_DISTRIBUTION)
-				 "  --insecure-skip-auth  DEV ONLY: --singleplayer ignores the pack's auth.lua (no sign-in)\n"
-				 "  --ignore-engine-req   DEV ONLY: --singleplayer loads the pack despite its engine_version_req\n"
+				 "  --insecure-skip-auth  DEV ONLY: --loopback ignores the pack's auth.lua (no sign-in)\n"
+				 "  --ignore-engine-req   DEV ONLY: --loopback loads the pack despite its engine_version_req\n"
 #endif
 				 "  --version        print build info and exit\n"
 				 "  --help           show this help\n"
 				 "\n"
-				 "Without --headless a window opens to the main menu; --singleplayer or\n"
+				 "Diagnostics:\n"
+				 "  --loopback        run an in-process server and join it over a loopback link. Isolates\n"
+				 "                    rendering, worldgen, pack Lua, physics and saves from the network:\n"
+				 "                    bypasses GNS, asset sync and compression negotiation. Not a play\n"
+				 "                    mode (--singleplayer is a deprecated alias)\n"
+				 "\n"
+				 "Without --headless a window opens to the main menu; --loopback or\n"
 				 "--server on the command line skips the menu and connects immediately\n"
 				 "(dropping back to the menu on failure instead of exiting).\n";
 }
@@ -203,6 +208,11 @@ int main(int argc, char **argv) {
 		return EXIT_SUCCESS;
 	}
 
+	const bool loopback_requested = args.has("loopback") || args.has("singleplayer");
+	if (args.has("singleplayer")) {
+		std::cerr << "client: --singleplayer is deprecated, use --loopback (a netcode-isolation diagnostic)\n";
+	}
+
 	// An explicit --content-pack is taken literally; the default also looks
 	// beside the executable (see kSingleplayerContentPack's comment).
 	if (const auto pack = args.value("content-pack"); pack && !pack->empty()) {
@@ -217,7 +227,7 @@ int main(int argc, char **argv) {
 		std::cerr << "client: --insecure-skip-auth is not available in this build\n";
 		return EXIT_FAILURE;
 #else
-		// Dev only: --singleplayer ignores the pack's auth.lua (get_login() is nil).
+		// Dev only: --loopback ignores the pack's auth.lua (get_login() is nil).
 		kSingleplayerSkipAuth = true;
 #endif
 	}
@@ -227,7 +237,7 @@ int main(int argc, char **argv) {
 		std::cerr << "client: --ignore-engine-req is not available in this build\n";
 		return EXIT_FAILURE;
 #else
-		// Dev only: --singleplayer loads the pack despite its engine_version_req.
+		// Dev only: --loopback loads the pack despite its engine_version_req.
 		kSingleplayerIgnoreEngineReq = true;
 #endif
 	}
@@ -257,8 +267,8 @@ int main(int argc, char **argv) {
 			std::cerr << "client: " << error << '\n';
 			return EXIT_FAILURE;
 		}
-		if (args.has("singleplayer")) {
-			std::cerr << "client: --net-sim applies to real (GNS) connections, not --singleplayer\n";
+		if (loopback_requested) {
+			std::cerr << "client: --net-sim applies to real (GNS) connections, not --loopback\n";
 			return EXIT_FAILURE;
 		}
 		if (!vb::net::GnsTransport::set_net_sim(*sim)) {
@@ -315,7 +325,7 @@ int main(int argc, char **argv) {
 
 	const std::string cli_server = args.value_or("server", "127.0.0.1");
 	const int cli_port = args.int_or("port", 27015);
-	const bool singleplayer = args.has("singleplayer");
+	const bool singleplayer = loopback_requested;
 	const bool headless = args.has("headless") || VB_HEADLESS_DEFAULT;
 	// The player's own preference (Settings screen / client.toml), never
 	// mutated. `view_distance` below starts equal to it but may be clamped
@@ -360,7 +370,7 @@ int main(int argc, char **argv) {
 #if defined(VB_WITH_AUTOMATION)
 	if (automation) {
 		// A windowed client driven over the channel: starts on the menu (or connects
-		// straight away with --server/--singleplayer) and takes synthetic input.
+		// straight away with --server/--loopback) and takes synthetic input.
 		app.set_observer(recorder.get());
 		return run_automated(app, *automation, &window, recorder.get());
 	}

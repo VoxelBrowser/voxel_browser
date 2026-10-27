@@ -767,7 +767,7 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				}
 				const auto ui = render
 						? menu.draw_connecting(connecting_singleplayer
-										  ? "Starting singleplayer world..."
+										  ? "Starting loopback world..."
 										  : connecting_status_text(client->status()),
 								  fraction)
 						: vb::render::MainMenu::ConnectingResult{};
@@ -836,7 +836,7 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 		}
 		case AppState::kError: {
 			const auto result = menu.draw_error(error_message,
-					connecting_singleplayer ? "Could not start singleplayer" : "Could not connect");
+					connecting_singleplayer ? "Could not start loopback session" : "Could not connect");
 			if (result.back) {
 				state = AppState::kMenu;
 			}

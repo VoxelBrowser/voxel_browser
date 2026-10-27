@@ -350,8 +350,9 @@ Other undecided:
   (`Singleplayer` in `src/client/session_host.hpp` constructs
   `LoopbackNetwork`/`ServerSession`/`ClientSession` directly).
   Direction (2026-10-25): it's a netcode-isolation diagnostic, not a play
-  mode — Phase 11 hides it from the menu and renames the flag (proposed
-  `--loopback`); name pending, `menu.singleplayer` alias kept (11.2 (a)).
+  mode — Phase 11 (11.1–11.3 done 2026-10-27) hid it from the menu and
+  renamed the flag `--loopback` (`--singleplayer` alias); `menu.loopback`
+  automation command, `menu.singleplayer` alias kept.
 
 ---
 

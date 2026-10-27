@@ -128,7 +128,7 @@ than creating an empty chunk.
 ## Windowed clients (E5)
 
 Without `--headless` the client opens a real window and starts on the main menu (or
-connects straight away with `--server`/`--singleplayer`), driven by the same synthetic
+connects straight away with `--server`/`--loopback`), driven by the same synthetic
 input. raygui reads raylib's real mouse state, which a script can't produce, so the menu
 commands inject the *result* of a click and fill the fields a player would type into.
 
@@ -136,7 +136,7 @@ commands inject the *result* of a click and fill the fields a player would type 
 |---|---|
 | `menu.set_name` | `{name}` → `{}` |
 | `menu.connect` | `{host, port, name?}` → `{}`; the transition shows up in `app_state` (`connecting` → `loading` → `playing`; the loading screen needs frames to mesh the first chunks) |
-| `menu.singleplayer` | `{name?}` → `{}` |
+| `menu.loopback` | `{name?}` → `{}`; starts the in-process loopback diagnostic (`menu.singleplayer` is the old name; no menu button exists) |
 | `signin.trust` / `signin.browser` / `signin.cancel` | `{}` → `{}`; the engine-drawn sign-in screen's *Continue* (first-use trust prompt), *Sign in with your browser* (or *with Google*) and *Cancel*, acted on by the next frame like the click. `unavailable` when that button is not on screen (read `auth` first). Builds with `VB_WITH_AUTH`; a headless client answers the trust prompt and starts the browser flow by itself |
 | `screenshot` | `{path}` → `{path, width, height}`; saves the framebuffer as a PNG at the end of the next frame (works on the menu and in game). `unsupported` on a headless client |
 | `type` | `{text}` → `{}`; appends to the chat box as keyboard characters would, opening it first; `key.press enter` then sends it. Works headless too (the box's buffer and Enter handling are shared; only raygui's drawing of it is windowed) |
@@ -149,7 +149,7 @@ packets **this process sends**: give the server and the clients the same spec fo
 symmetric link (so `lag_ms=100` shows up as roughly 200 ms of round-trip time).
 `lag_ms`/`jitter_ms` are 0..5000, the percentages 0..100; jitter averages `jitter_ms` and is
 capped at twice that. Unknown keys, bad numbers and trailing commas are errors. It needs a
-`VB_WITH_NET` build, applies to real (GNS) connections only (`--singleplayer` is refused:
+`VB_WITH_NET` build, applies to real (GNS) connections only (`--loopback` is refused:
 it uses an in-process loopback), and a build without `VB_WITH_AUTOMATION` refuses the flag
 like `--automation`. The client snapshot's `rtt_ms` (and the `rtt_ms` predicate) is the
 measured round-trip time, so a test can prove the simulation took effect.
@@ -206,7 +206,7 @@ test_recorder.py` records a session and replays the script on a fresh server.
 
 - Clicking raygui widgets by pixel (menu *results* are injected instead), settings and
   keybindings screens.
-- `--net-sim` for `--singleplayer` (loopback transport has no delay/drop queue).
+- `--net-sim` for `--loopback` (loopback transport has no delay/drop queue).
 - Recording: mouse look, scene setup, multi-client sessions, and replaying menu-driven starts.
 - TCP: more than one simultaneous connection, non-loopback binding (deliberately).
 

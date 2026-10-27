@@ -25,7 +25,7 @@ identity provider behind the `IdpBackend` interface (`vbtest/idp.py`).
 | File | What | Needs |
 |---|---|---|
 | `test_auth.py` | the smoke suite: token-file sign-in, bad tokens, the browser flow, one wall-clock re-auth | emulator |
-| `test_auth_keycloak.py` | sign-in scenarios, revocation (admin logout, disabled user, idle session, key and refresh-token rotation), IdP outages and bad bodies, singleplayer | emulator, or real Keycloak for everything not `mock_only` |
+| `test_auth_keycloak.py` | sign-in scenarios, revocation (admin logout, disabled user, idle session, key and refresh-token rotation), IdP outages and bad bodies, loopback | emulator, or real Keycloak for everything not `mock_only` |
 | `test_mock_keycloak.py` | self-tests of the emulator (crypto, protocol, faults); **no game binaries**, runs in seconds | nothing |
 | `test_mock_keycloak_matches_real.py` | emulator vs a real Keycloak: same discovery, JWKS, claims, error bodies | `--vb-idp=keycloak` |
 
@@ -133,7 +133,7 @@ saw it". The path is printed with the failure; rebuild a page with
   `fill`'s `not_loaded == 0`.
 - **Players spawn on the same spot.** A punch hits the nearest *player* before any block, so
   teleport the other player away before `break_block`.
-- **Pack UI needs a dedicated server.** `--singleplayer` never installs the pack's keybinds
+- **Pack UI needs a dedicated server.** `--loopback` never installs the pack's keybinds
   (`docs/e2e-automation.md` §10), so `key_press("inventory")` only works against `server`.
 - Click actions hold their aim steady for a few frames first (the server applies a command's
   look direction *after* running the pack's input hook), so `break_block`/`place_block` take

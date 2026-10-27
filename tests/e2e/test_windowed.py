@@ -91,16 +91,16 @@ def test_screenshot_needs_a_window(server, clients, artifact_dir):
     assert e.value.code == "unsupported"
 
 
-def test_singleplayer_says_on_the_menu_when_the_pack_needs_another_engine(make_clients, tmp_path, artifact_dir):
-    # pack.toml's engine_version_req admits no current build: singleplayer must not start (it used to
+def test_loopback_says_on_the_menu_when_the_pack_needs_another_engine(make_clients, tmp_path, artifact_dir):
+    # pack.toml's engine_version_req admits no current build: loopback must not start (it used to
     # run the base block set and only say why on stderr); the error screen names the requirement.
     pack = make_pack(REPO, tmp_path, {"pack.toml": 'name = "too_new"\nversion = "1.0.0"\nengine_version_req = ">=99.0.0"\n'})
     (solo,) = make_clients(None)(1, names=["Solo"], via_menu=True,
                                  extra_args=["--content-pack", str(pack), "--world-dir", str(tmp_path / "world")])
     expect(solo).to_be_in_state("menu")
-    solo.menu_singleplayer()
+    solo.menu_loopback()
     expect(solo).to_be_in_state("error", timeout=30)
     message = solo.state()["error_message"]
-    assert "singleplayer" in message and ">=99.0.0" in message, message
-    shot = solo.screenshot(artifact_dir / "singleplayer_engine_req.png")
+    assert "loopback" in message and ">=99.0.0" in message, message
+    shot = solo.screenshot(artifact_dir / "loopback_engine_req.png")
     assert stats(shot["path"])["distinct_colors"] >= 4

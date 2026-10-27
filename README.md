@@ -84,7 +84,7 @@ substitute for it.
 | 5 — Minimum playable base (content pack, block editing, main menu, chat/day-night/respawn, crafting) | ✅ Substantially done — see `REMAINING_TASKS.md` 5.5 for remaining docs/polish |
 
 Also landed since the phase list was written: world persistence (flat
-per-region files; dedicated servers and `--singleplayer` both save, the latter
+per-region files; dedicated servers and the `--loopback` diagnostic both save, the latter
 under `--world-dir`, default `world_singleplayer`), the `vb` developer CLI,
 the `content/base` HUD (health/hunger bars, hotbar, live inventory screen,
 crosshair), a dev-only end-to-end automation harness (see below), the
@@ -248,7 +248,7 @@ Binaries land in `build/`:
 
 ```bash
 ./build/voxel_browser_server --config server.toml   # start a server
-./build/voxel_browser --singleplayer --name Me       # in-process server + join
+./build/voxel_browser --loopback --name Me           # diagnostic: in-process server over a loopback link
 ./build/voxel_browser --headless --frames 1          # no-GPU smoke run
 ```
 
@@ -259,22 +259,26 @@ optional and CLI flags override the file. Real remote connections
 GameNetworkingSockets — see the next section for its one extra system
 dependency (protobuf).
 
-`voxel_browser --singleplayer` runs a real in-process server + client over a
-loopback transport, so it works with the plain build above — no `VB_WITH_NET`
-needed to try it. To also get the `content/base` pack's chat/crafting/
+`voxel_browser --loopback` (old name `--singleplayer`) is a diagnostic, not a
+play mode: it runs a real in-process server + client over a loopback transport,
+so it works with the plain build above — no `VB_WITH_NET` needed. It isolates
+rendering, worldgen, pack Lua, physics and saves from the network, and does
+**not** cover the transport (GNS), asset sync, compression negotiation, or pack
+keybinds (it never installs the keybind registry). To play, join a server
+(`vb pack dev` hosts one). To also get the `content/base` pack's chat/crafting/
 inventory scripting (rather than just the hardcoded terrain/physics/menu),
 configure with `-DVB_WITH_LUA=ON` too:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DVB_WITH_LUA=ON
 cmake --build build
-./build/voxel_browser --singleplayer --name Me
+./build/voxel_browser --loopback --name Me
 ```
 
 Once in, WASD + mouse to move, left-click (held) to break a block,
 right-click to place one, `E` for the inventory, `Esc` for the pause screen,
 Enter to open the chat box — type `/craft base:planks` after mining some wood
-to see the base pack's example crafting system in action. Singleplayer worlds
+to see the base pack's example crafting system in action. Loopback worlds
 are saved on exit; pass `--world-dir <dir>` to choose where.
 
 #### Build options
