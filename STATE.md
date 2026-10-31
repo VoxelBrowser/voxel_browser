@@ -94,10 +94,15 @@ content-only (e.g. the user explicitly asks for a content-pack feature).
   feature-branch push alone triggers nothing — open a PR, push to a
   `*-workflow` branch, or dispatch manually). Windows (Winsock code) and
   macOS are unbuilt.
-- **Main menu redesign (Phase 12) planned** 2026-10-25, not started: design
-  `architecture_spec/rendering.md` §11.6, plan `remaining_tasks/phase12.md`.
-  Gotcha: `test_connecting_panel_fits_on_screen` assumes the flat (18,18,22)
-  clear colour, which the dirt backdrop replaces (12.6).
+- **Main menu redesign (Phase 12) landed** 2026-10-31 (12.1–12.7): design
+  `architecture_spec/rendering.md` §11.6, detail `remaining_tasks/phase12.md`.
+  Traps: Settings is the only writer of `player_name` (`ClientApp::session_name_`
+  holds `--name`/automation overrides); `MainMenu` loads its backdrop/fonts lazily
+  on the first draw (needs a GL context); the macOS job is Clang `-Werror`
+  (unused private fields) — check changed files with `clang++ -fsyntax-only -Wall
+  -Wextra -Werror -Wunused-private-field` using a build dir's `flags.make`;
+  menu screenshots can be taken without the harness via `xvfb-run` + `xdotool`
+  (hold the button ~250 ms: a same-frame press/release is not seen by raygui).
 - **In-engine auth (Phase 9) landed** 2026-10-05/06 — see
   `REMAINING_TASKS.md` Phase 9 for what is still open, `docs/auth.md` for
   operators.

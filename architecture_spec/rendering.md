@@ -192,10 +192,10 @@ dev-only e2e automation (`docs/e2e-automation.md`). The seam is ordinary
 engine code and ships in production; only the automation driver is gated.
 
 
-### 11.6 Engine menu screens (planned 2026-10-25, Phase 12)
+### 11.6 Engine menu screens (implemented 2026-10-31, Phase 12)
 
 The non-gameplay screens (`vb::render::MainMenu`, `src/render/main_menu.cpp`)
-are engine-drawn, never pack content. Phase 12 redesigns them as a
+are engine-drawn, never pack content. Phase 12 redesigned them as a
 search-engine-style home page; the approved mockup is the design canvas
 linked from `remaining_tasks/phase12.md`.
 

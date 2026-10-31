@@ -720,7 +720,12 @@ Files that currently point here: `ARCHITECTURE_SPEC.md`,
    fd 1 for protocol frames, pointing fd 1 itself at stderr.
 9. **Windowed automation (E5).** The client can now run `--automation` in a real window
    (under `xvfb-run`, software GL). raygui can't be clicked by script, so menu commands
-   inject the click's *result* and fill the menu's fields.
+   inject the click's *result* and fill the menu's fields. Since Phase 12 the main screen has one
+   address field, no player-name field and no Singleplayer/Quit buttons: `menu.set_name` and
+   `menu.connect{name}` change a session-only name (never saved), `menu.loopback` /
+   `menu.singleplayer` still start the diagnostic, and `state.menu {recent_shown, recent_total}`
+   reports what the main screen drew. Menu screenshots now have the dirt backdrop, so pixel
+   checks must not assume the flat (18,18,22) clear colour (the backdrop repeats every 64 rows).
 10. **`World::set_block` creates chunks on demand and returns "changed", not
    "chunk exists" (found in E3).** The server `set_block`/`fill` therefore check
    `has_chunk` first and refuse edits outside loaded chunks, instead of

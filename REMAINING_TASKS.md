@@ -405,7 +405,7 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
 
 ---
 
-## Phase 12 — Main menu redesign — planned (2026-10-25)
+## Phase 12 — Main menu redesign ✅ done (2026-10-31)
 
 > User-requested: search-engine-style home page — "Voxel Browser" title,
 > address bar + Continue, 3 recent servers (click → Settings › History),
@@ -436,7 +436,7 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
 - [x] 12.6 tests (connecting-panel e2e compares against the backdrop)
       (address parser + history cap unit tests; `record_recent_server`; automation state
       `menu {recent_shown, recent_total}`; e2e `test_main_menu_shows_only_three_recent_servers`)
-- [ ] 12.7 docs
+- [x] 12.7 docs (README menu paragraph, `docs/e2e-automation.md` item 9, STATE.md)
 
 ---
 
