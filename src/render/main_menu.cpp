@@ -147,7 +147,9 @@ struct MainMenu::Assets {
 
 MainMenu::MainMenu(const core::ClientConfig &config) :
 		assets_(std::make_unique<Assets>()),
-		address_("127.0.0.1"), port_text_("27015"), player_name_(config.player_name) {
+		address_("127.0.0.1"),
+		port_text_("27015"),
+		player_name_(config.player_name) {
 }
 
 MainMenu::~MainMenu() = default;
