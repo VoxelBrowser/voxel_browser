@@ -414,7 +414,9 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
 > Design: `architecture_spec/rendering.md` §11.6. Full plan and mockup link:
 > `remaining_tasks/phase12.md`.
 
-- [ ] 12.1 backdrop (embedded dirt texture + scrim) and fonts on all screens
+- [x] 12.1 backdrop (embedded dirt texture + scrim) and fonts on all screens
+      (2026-10-31: `src/render/resources/`, `vb::render::resources`, OFL texts in
+      release `licenses/`; screenshot-verified; 12.6 must fix the connecting e2e)
 - [ ] 12.2 main screen: title, address field + Continue, recent ×3, Settings
 - [ ] 12.3 Settings sections (General/Video/Controls/History), history cap 50
 - [ ] 12.4 `player_name` written only by Settings; CLI/automation = override
