@@ -309,20 +309,11 @@ worker-thread pool builds per-face-culled buffers with baked light/AO from
 main-thread-only, budgeted per frame; frustum + distance culling; transparent
 blocks in a back-to-front second pass.
 
-**Entity rendering — billboard sprites, decided 2026-09-11 (Q7, open-
-questions doc):** players and Lua entity kinds are Don't-Starve-style flat
-billboards (`DrawBillboardPro`, fixed world-up, confirmed against raylib
-5.5's `rmodels.c`), not 3D models. `facings` (4 or 8) buckets camera-bearing-
-minus-entity-yaw into a pose, with hysteresis against flicker; unauthored
-mirror poses come from negative-`size.x`. Animation priority is fixed:
-`dead > hurt_pulse > acting > jump/fall > run > walk > idle`, driven by
-`vel`+`flags`. Defined per-kind via `vb.register_entity{visual = {...}}`
-(closed frame-size-variant set, `facings` rows, `clips` list, validated
-against real PNG dimensions at load), with an optional per-instance
-`ScriptState.visual_override` merge (e.g. skins). Ships against a hardcoded
-placeholder (Phase 3) ahead of real Lua art (Phase 4.2/4.4/5.1). Out of
-scope for v1: skeletal animation, per-limb equipment, blob shadows,
-per-entity dynamic lighting.
+**Entity rendering — billboard sprites (Q7, decided 2026-09-11):** players and Lua entity kinds
+are Don't-Starve-style flat billboards (`DrawBillboardPro`), not 3D models; per-kind
+`vb.register_entity{visual = {...}}` with a fixed animation priority. Full text, priority
+order and out-of-scope list: `architecture_spec/rendering.md` "§10 text moved from
+ARCHITECTURE_SPEC.md (2026-10-31)".
 
 **Frame loop:** poll input → sample+push+send `InputCmd` → predict local
 player → recv network → apply snapshots/reconcile/chunk-deltas → interpolate
@@ -333,7 +324,7 @@ debug overlay) → present. Target 60 FPS, decoupled from the 20 Hz tick.
 Full billboard/spritesheet design (frame-size variant table, per-kind
 `visual` schema, per-instance override mechanics): `architecture_spec/rendering.md`.
 
-**Menu screens (Phase 12, planned):** search-engine-style home (title,
+**Menu screens (Phase 12, implemented 2026-10-31):** search-engine-style home (title,
 address bar + Continue, 3 recent servers that open Settings › History,
 Settings bottom-left) over a tiled dirt backdrop on every non-gameplay
 screen; design in `architecture_spec/rendering.md` §11.6.

@@ -84,3 +84,29 @@
 Out of scope: a server browser / master list (Deferred), favourites, server
 icons or MOTD in the recent list (would need a ping protocol), animated
 backdrop.
+
+## Completion log (moved from REMAINING_TASKS.md, 2026-10-31)
+
+- [x] 12.1 backdrop (embedded dirt texture + scrim) and fonts on all screens
+      (2026-10-31: `src/render/resources/`, `vb::render::resources`, OFL texts in
+      release `licenses/`; screenshot-verified; connecting e2e fixed in 12.1: compares the last row to the row 64 above)
+- [x] 12.2 main screen: title, address field + Continue, recent ×3, Settings
+      (2026-10-31: `vb::core::parse_server_address` + unit test; recent click and
+      the link open Settings for now — History section is 12.3; the player-name
+      field is gone from the main screen until 12.3/12.4 give it a home)
+- [x] 12.3 Settings sections (General/Video/Controls/History), history cap 50
+      (2026-10-31: `open_settings(config, section, highlight)`, `kMaxServerHistory`=50,
+      `kMaxPlayerNameLength`=32; Settings Save also updates the menu's in-memory
+      name until 12.4 moves ownership to `ClientApp`; slider labels drawn by hand —
+      raygui puts them left of the bar in a dark colour)
+- [x] 12.4 `player_name` written only by Settings; CLI/automation = override
+      (2026-10-31: `ClientApp::session_name_`; `apply_cli_overrides` no longer applies
+      `--name`; empty automation `name` keeps the current one; e2e
+      `test_menu_name_override_is_session_only`)
+- [x] 12.5 remove Singleplayer (with 11.2) and Quit buttons
+      (done with 12.2: no buttons, no `result.quit`/`singleplayer`, no "exited from menu"
+      line; `menu.singleplayer`/`menu.loopback` automation kept)
+- [x] 12.6 tests (connecting-panel e2e compares against the backdrop)
+      (address parser + history cap unit tests; `record_recent_server`; automation state
+      `menu {recent_shown, recent_total}`; e2e `test_main_menu_shows_only_three_recent_servers`)
+- [x] 12.7 docs (README menu paragraph, `docs/e2e-automation.md` item 9, STATE.md)

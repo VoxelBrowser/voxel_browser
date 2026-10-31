@@ -246,3 +246,24 @@ loading screens get the backdrop and panel styling without layout changes.
 
 All layouts must fit the enforced 720×360 minimum window
 (`kMinWindowWidth`/`kMinWindowHeight`) without clipping.
+
+---
+
+## §10 text moved from ARCHITECTURE_SPEC.md (2026-10-31)
+
+> Moved verbatim when `ARCHITECTURE_SPEC.md` was dreamed; the core keeps a summary and a pointer here.
+
+**Entity rendering — billboard sprites, decided 2026-09-11 (Q7, open-
+questions doc):** players and Lua entity kinds are Don't-Starve-style flat
+billboards (`DrawBillboardPro`, fixed world-up, confirmed against raylib
+5.5's `rmodels.c`), not 3D models. `facings` (4 or 8) buckets camera-bearing-
+minus-entity-yaw into a pose, with hysteresis against flicker; unauthored
+mirror poses come from negative-`size.x`. Animation priority is fixed:
+`dead > hurt_pulse > acting > jump/fall > run > walk > idle`, driven by
+`vel`+`flags`. Defined per-kind via `vb.register_entity{visual = {...}}`
+(closed frame-size-variant set, `facings` rows, `clips` list, validated
+against real PNG dimensions at load), with an optional per-instance
+`ScriptState.visual_override` merge (e.g. skins). Ships against a hardcoded
+placeholder (Phase 3) ahead of real Lua art (Phase 4.2/4.4/5.1). Out of
+scope for v1: skeletal animation, per-limb equipment, blob shadows,
+per-entity dynamic lighting.
