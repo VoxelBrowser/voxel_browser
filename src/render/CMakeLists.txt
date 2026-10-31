@@ -6,7 +6,19 @@ add_library(vb_raygui_impl STATIC raygui_impl.c)
 target_link_libraries(vb_raygui_impl PUBLIC vb_raygui)
 set_target_properties(vb_raygui_impl PROPERTIES C_STANDARD 99)
 
+# Menu backdrop texture + fonts (src/render/resources), baked in so the menu works with no pack
+# loaded and can't fail on a missing file. Licence texts ship alongside (release bundle).
+include(${CMAKE_SOURCE_DIR}/cmake/EmbedFiles.cmake)
+set(_vb_render_resources_cpp "${CMAKE_BINARY_DIR}/generated/vb_render_resources.cpp")
+vb_embed_files("${_vb_render_resources_cpp}"
+  ROOT "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+  GLOBS "dirt.png" "*.otf" "*.ttf"
+  NAMESPACE "vb::render::resources"
+  HEADER "vb/render/resources.hpp")
+
 add_library(vb_render STATIC
+  ${_vb_render_resources_cpp}
+  resources.cpp
   chunk_renderer.cpp
   crack_atlas.cpp
   crack_overlay.cpp

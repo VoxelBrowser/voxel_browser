@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -20,6 +21,9 @@ namespace vb::render {
 class MainMenu {
 public:
 	explicit MainMenu(const core::ClientConfig &config);
+	~MainMenu();
+	MainMenu(MainMenu &&) noexcept;
+	MainMenu &operator=(MainMenu &&) noexcept;
 
 	// Pre-fills the connect fields (e.g. from CLI overrides) before the first
 	// draw_main() call.
@@ -123,6 +127,14 @@ public:
 	void draw_loading(float fraction, std::string_view operator_title);
 
 private:
+	// Embedded dirt backdrop + UI fonts (src/render/resources), loaded lazily on the first draw
+	// because they need a live GL context. Opaque here so this header stays raylib-free.
+	struct Assets;
+	std::unique_ptr<Assets> assets_;
+	void ensure_assets();
+	// Tiled dirt texture under a dark scrim; every draw_* starts with it (Phase 12.1).
+	void draw_backdrop();
+
 	std::string address_;
 	std::string port_text_;
 	int port_ = 27015;

@@ -9,6 +9,8 @@
 #include <raygui.h>
 #include <raylib.h>
 
+#include "vb/render/resources.hpp"
+
 namespace vb::render {
 
 namespace {
@@ -38,6 +40,16 @@ std::vector<std::string> wrap_gui_text(std::string_view text, float width) {
 		lines.push_back(line);
 	}
 	return lines;
+}
+
+// The shared dark rounded panel (#140E0A at ~85%, 1 px 14%-white border) with an optional title in
+// its 24 px header band (content layouts below it assume that band, as GuiPanel's was).
+void draw_panel(Rectangle r, const char *title) {
+	DrawRectangleRounded(r, 0.04f, 8, Color{ 0x14, 0x0E, 0x0A, 217 });
+	DrawRectangleRoundedLinesEx(r, 0.04f, 8, 1.0f, Color{ 255, 255, 255, 36 });
+	if (title != nullptr && title[0] != '\0') {
+		GuiLabel(Rectangle{ r.x + 12.0f, r.y + 2.0f, r.width - 24.0f, 22.0f }, title);
+	}
 }
 
 constexpr int kTextBufSize = 128;
@@ -114,8 +126,78 @@ std::string key_display_name(int key) {
 
 } // namespace
 
+struct MainMenu::Assets {
+	Texture2D backdrop{};
+	Font ui_font{};
+	Font title_font{};
+	bool loaded = false;
+
+	Assets() = default;
+	Assets(const Assets &) = delete;
+	Assets &operator=(const Assets &) = delete;
+	~Assets() {
+		// Skip the GL calls if the window is already gone (member destruction order).
+		if (loaded && IsWindowReady()) {
+			UnloadTexture(backdrop);
+			UnloadFont(ui_font);
+			UnloadFont(title_font);
+		}
+	}
+};
+
 MainMenu::MainMenu(const core::ClientConfig &config) :
+		assets_(std::make_unique<Assets>()),
 		address_("127.0.0.1"), port_text_("27015"), player_name_(config.player_name) {
+}
+
+MainMenu::~MainMenu() = default;
+MainMenu::MainMenu(MainMenu &&) noexcept = default;
+MainMenu &MainMenu::operator=(MainMenu &&) noexcept = default;
+
+void MainMenu::ensure_assets() {
+	if (assets_->loaded || !IsWindowReady()) {
+		return;
+	}
+	assets_->loaded = true;
+	const auto dirt = resources::find("dirt.png");
+	if (dirt.data != nullptr) {
+		Image img = LoadImageFromMemory(".png", dirt.data, static_cast<int>(dirt.size));
+		assets_->backdrop = LoadTextureFromImage(img);
+		UnloadImage(img);
+		SetTextureFilter(assets_->backdrop, TEXTURE_FILTER_POINT);
+		SetTextureWrap(assets_->backdrop, TEXTURE_WRAP_REPEAT);
+	}
+	const auto load_font = [](const char *file, const char *ext, int size) {
+		const auto blob = resources::find(file);
+		if (blob.data == nullptr) {
+			return GetFontDefault();
+		}
+		Font f = LoadFontFromMemory(ext, blob.data, static_cast<int>(blob.size), size, nullptr, 0);
+		if (f.texture.id == 0) {
+			return GetFontDefault();
+		}
+		SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
+		return f;
+	};
+	assets_->ui_font = load_font("Inter-Regular.otf", ".otf", 32);
+	assets_->title_font = load_font("PixelifySans-Regular.ttf", ".ttf", 64);
+	GuiSetFont(assets_->ui_font);
+	GuiSetStyle(DEFAULT, TEXT_SIZE, 15);
+	// Labels sit directly on the dark panels, so they need light text.
+	GuiSetStyle(LABEL, TEXT_COLOR_NORMAL, static_cast<int>(0xEDE6DCFFu));
+}
+
+void MainMenu::draw_backdrop() {
+	ensure_assets();
+	const float w = static_cast<float>(GetScreenWidth());
+	const float h = static_cast<float>(GetScreenHeight());
+	if (assets_->backdrop.id != 0) {
+		// The 16x16 texture drawn 4x, tiled across the window.
+		const float tile = static_cast<float>(assets_->backdrop.width) * 4.0f;
+		DrawTexturePro(assets_->backdrop, Rectangle{ 0.0f, 0.0f, w / tile * static_cast<float>(assets_->backdrop.width), h / tile * static_cast<float>(assets_->backdrop.height) },
+				Rectangle{ 0.0f, 0.0f, w, h }, Vector2{ 0.0f, 0.0f }, 0.0f, WHITE);
+	}
+	DrawRectangle(0, 0, static_cast<int>(w), static_cast<int>(h), Color{ 0, 0, 0, 140 }); // 55% black
 }
 
 void MainMenu::prefill(std::string_view address, int port, std::string_view player_name) {
@@ -125,10 +207,11 @@ void MainMenu::prefill(std::string_view address, int port, std::string_view play
 }
 
 MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_servers) {
+	draw_backdrop();
 	MainResult result;
 
 	const float panel_w = 420.0f;
-	GuiPanel(centered(panel_w, 420.0f, 80.0f), "voxel_browser");
+	draw_panel(centered(panel_w, 420.0f, 80.0f), "voxel_browser");
 
 	float y = 130.0f;
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
@@ -212,10 +295,11 @@ void MainMenu::open_settings(const core::ClientConfig &config) {
 }
 
 MainMenu::SettingsResult MainMenu::draw_settings(core::ClientConfig &config) {
+	draw_backdrop();
 	SettingsResult result;
 
 	const float panel_w = 460.0f;
-	GuiPanel(centered(panel_w, 420.0f, 80.0f), "Settings");
+	draw_panel(centered(panel_w, 420.0f, 80.0f), "Settings");
 
 	float y = 130.0f;
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
@@ -292,10 +376,11 @@ void MainMenu::open_keybindings(const core::ClientConfig &config) {
 
 MainMenu::KeybindingsResult MainMenu::draw_keybindings(core::ClientConfig &config,
 		const InputFrame &input) {
+	draw_backdrop();
 	KeybindingsResult result;
 
 	const float panel_w = 420.0f;
-	GuiPanel(centered(panel_w, 380.0f, 80.0f), "Keybindings");
+	draw_panel(centered(panel_w, 380.0f, 80.0f), "Keybindings");
 
 	float y = 130.0f;
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
@@ -343,6 +428,7 @@ MainMenu::KeybindingsResult MainMenu::draw_keybindings(core::ClientConfig &confi
 
 MainMenu::ConnectingResult MainMenu::draw_connecting(std::string_view status_text,
 		float fraction) {
+	draw_backdrop();
 	ConnectingResult result;
 	// A known fraction (asset-sync byte progress) grows the panel by one row
 	// for a real GuiProgressBar; unknown (-1, every other handshake stage)
@@ -359,7 +445,7 @@ MainMenu::ConnectingResult MainMenu::draw_connecting(std::string_view status_tex
 	// posture as `centered()`'s x.
 	const float panel_y = std::max(20.0f,
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
-	GuiPanel(centered(panel_w, panel_h, panel_y), "Connecting");
+	draw_panel(centered(panel_w, panel_h, panel_y), "Connecting");
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
 	GuiLabel(Rectangle{ x, panel_y + 50.0f, panel_w - 40.0f, 24.0f },
 			std::string(status_text).c_str());
@@ -435,6 +521,7 @@ bool password_box(Rectangle bounds, std::string &value, bool &focused) {
 } // namespace
 
 MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
+	draw_backdrop();
 	SigningInResult result;
 	const float panel_w = 460.0f;
 	float panel_h = 150.0f;
@@ -454,7 +541,7 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
 	const std::string title = view.title.empty() ? std::string("Sign in")
 												 : "Sign in - " + std::string(view.title); // ASCII: raylib's default font has no em dash
-	GuiPanel(centered(panel_w, panel_h, panel_y), title.c_str());
+	draw_panel(centered(panel_w, panel_h, panel_y), title.c_str());
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
 	const float w = panel_w - 40.0f;
 	float y = panel_y + 40.0f;
@@ -519,6 +606,7 @@ MainMenu::SigningInResult MainMenu::draw_signing_in(const SigningInView &view) {
 }
 
 MainMenu::ErrorResult MainMenu::draw_error(std::string_view reason, std::string_view title) {
+	draw_backdrop();
 	ErrorResult result;
 	const float panel_w = 460.0f;
 	// Long reasons (a pack's engine_version_req, auth errors) wrap instead of running off the panel.
@@ -535,7 +623,7 @@ MainMenu::ErrorResult MainMenu::draw_error(std::string_view reason, std::string_
 	// past the 360px minimum window height too.
 	const float panel_y = std::max(20.0f,
 			(static_cast<float>(GetScreenHeight()) - panel_h) * 0.5f);
-	GuiPanel(centered(panel_w, panel_h, panel_y), std::string(title).c_str());
+	draw_panel(centered(panel_w, panel_h, panel_y), std::string(title).c_str());
 	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
 	for (std::size_t i = 0; i < lines.size(); ++i) {
 		GuiLabel(Rectangle{ x, panel_y + 50.0f + line_h * static_cast<float>(i), panel_w - 40.0f, line_h },
@@ -548,6 +636,7 @@ MainMenu::ErrorResult MainMenu::draw_error(std::string_view reason, std::string_
 }
 
 void MainMenu::draw_loading(float fraction, std::string_view operator_title) {
+	draw_backdrop();
 	// Stage 1: a fully generic bar, no data dependency -- drawn every call
 	// regardless of whether stage 2's operator_title has arrived yet, so it
 	// never waits on anything network-derived.
