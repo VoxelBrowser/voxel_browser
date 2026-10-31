@@ -430,8 +430,12 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
       (2026-10-31: `ClientApp::session_name_`; `apply_cli_overrides` no longer applies
       `--name`; empty automation `name` keeps the current one; e2e
       `test_menu_name_override_is_session_only`)
-- [ ] 12.5 remove Singleplayer (with 11.2) and Quit buttons
-- [ ] 12.6 tests (connecting-panel e2e compares against the backdrop)
+- [x] 12.5 remove Singleplayer (with 11.2) and Quit buttons
+      (done with 12.2: no buttons, no `result.quit`/`singleplayer`, no "exited from menu"
+      line; `menu.singleplayer`/`menu.loopback` automation kept)
+- [x] 12.6 tests (connecting-panel e2e compares against the backdrop)
+      (address parser + history cap unit tests; `record_recent_server`; automation state
+      `menu {recent_shown, recent_total}`; e2e `test_main_menu_shows_only_three_recent_servers`)
 - [ ] 12.7 docs
 
 ---

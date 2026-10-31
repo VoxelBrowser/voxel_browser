@@ -248,6 +248,15 @@ void apply_cli_overrides(ServerConfig &config, const Args &args) {
 	}
 }
 
+void record_recent_server(ClientConfig &config, const std::string &server) {
+	auto &recents = config.recent_servers;
+	recents.erase(std::remove(recents.begin(), recents.end(), server), recents.end());
+	recents.insert(recents.begin(), server);
+	if (recents.size() > kMaxServerHistory) {
+		recents.resize(kMaxServerHistory);
+	}
+}
+
 void apply_cli_overrides(ClientConfig &config, const Args &args) {
 	// `--name` is deliberately not applied here: it is a session-only override handled by ClientApp,
 	// so it can never be written back to client.toml (Settings is the only writer of player_name).

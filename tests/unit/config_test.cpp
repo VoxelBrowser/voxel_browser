@@ -186,3 +186,20 @@ TEST_CASE("client CLI overrides") {
 	CHECK(cfg.player_name == "Player");
 	CHECK(cfg.fov == doctest::Approx(100.0));
 }
+
+TEST_CASE("recent servers: most recent first, de-duplicated, capped at kMaxServerHistory") {
+	ClientConfig cfg;
+	record_recent_server(cfg, "a:1");
+	record_recent_server(cfg, "b:2");
+	record_recent_server(cfg, "a:1"); // moves to the front instead of duplicating
+	REQUIRE(cfg.recent_servers.size() == 2);
+	CHECK(cfg.recent_servers[0] == "a:1");
+	CHECK(cfg.recent_servers[1] == "b:2");
+
+	for (std::size_t i = 0; i < vb::core::kMaxServerHistory + 20; ++i) {
+		record_recent_server(cfg, "host" + std::to_string(i) + ":27015");
+	}
+	CHECK(cfg.recent_servers.size() == vb::core::kMaxServerHistory);
+	CHECK(cfg.recent_servers.front() == "host" + std::to_string(vb::core::kMaxServerHistory + 19) + ":27015");
+	CHECK(vb::core::kMaxServerHistory == 50);
+}

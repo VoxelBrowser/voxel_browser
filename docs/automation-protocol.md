@@ -214,6 +214,8 @@ test_recorder.py` records a session and replays the script on a fresh server.
 
 Client: `app_state` (`menu|settings|keybindings|connecting|loading|playing|error`),
 `error_message` (what the error screen says; only while `app_state` is `error`),
+`menu {recent_shown, recent_total}` (only while `app_state` is `menu`: the recent-server rows the main
+screen drew, at most 3, and how many servers the history holds),
 `joined`, `net_id`, `feet [x,y,z]`, `on_ground`, `yaw`, `pitch`, `chat [str]` (the HUD's last 8
 lines), `chat_open`, `mouse_captured`, `selected_slot` (1-based),
 `health`/`max_health`/`hunger`/`max_hunger` (the player's own status, once the server's first

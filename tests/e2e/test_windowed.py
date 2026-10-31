@@ -17,6 +17,17 @@ from vbtest.stack import make_pack
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 
+def test_main_menu_shows_only_three_recent_servers(server, clients):
+    """A long history lists every entry in Settings > History, but the main screen only shows
+    the three most recent."""
+    recents = ", ".join('"h%d.example:%d"' % (i, 27000 + i) for i in range(12))
+    (alice,) = clients(1, names=["Alice"], via_menu=True,
+                       config_extra="recent_servers = [%s]\n" % recents)
+    expect(alice).to_be_in_state("menu")
+    st = alice.state()
+    assert st["menu"] == {"recent_shown": 3, "recent_total": 12}, st["menu"]
+
+
 
 def test_main_menu_connect_and_world_screenshots(server, clients, artifact_dir):
     (alice,) = clients(1, names=["Alice"], via_menu=True)

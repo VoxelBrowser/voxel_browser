@@ -245,6 +245,7 @@ MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_
 	const float button_w = 110.0f;
 	const float row_h = 26.0f;
 	const std::size_t shown = std::min<std::size_t>(recent_servers.size(), 3);
+	recent_shown_ = static_cast<int>(shown);
 
 	// Stack: title, address row, error line, recent panel. Centred vertically so it fits the
 	// 720x360 minimum window.

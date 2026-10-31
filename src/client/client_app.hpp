@@ -118,6 +118,9 @@ public:
 	bool menu_active() const { return state == AppState::kMenu; }
 	// What the error screen says (app_state "error").
 	const std::string &error_text() const { return error_message; }
+	// Main-screen recent-server rows drawn last frame, and how many servers the history holds.
+	int menu_recent_shown() const { return menu.recent_shown(); }
+	std::size_t recent_server_count() const { return config.recent_servers.size(); }
 	// The name this connection used (what the menu holds), not config.player_name, which only
 	// follows it after a menu-driven connect.
 	const std::string &player_name() const { return session_name_; }

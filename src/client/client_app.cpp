@@ -529,13 +529,7 @@ void ClientApp::enter_playing() {
 	third_person = false;
 
 	if (!connecting_singleplayer) {
-		auto &recents = config.recent_servers;
-		recents.erase(std::remove(recents.begin(), recents.end(), connecting_target),
-				recents.end());
-		recents.insert(recents.begin(), connecting_target);
-		if (recents.size() > vb::core::kMaxServerHistory) {
-			recents.resize(vb::core::kMaxServerHistory);
-		}
+		vb::core::record_recent_server(config, connecting_target);
 	}
 	// Headless never touched client.toml (CI / tests must not rewrite it).
 	if (render) {

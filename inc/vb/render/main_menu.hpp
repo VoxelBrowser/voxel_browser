@@ -51,6 +51,9 @@ public:
 	// are per server). Empty = nothing drawn.
 	void set_signed_in_label(std::string label) { signed_in_label_ = std::move(label); }
 
+	// How many recent-server rows the last draw_main() showed (at most 3).
+	int recent_shown() const { return recent_shown_; }
+
 	const std::string &address() const { return address_; }
 	int port() const { return port_; }
 
@@ -152,6 +155,7 @@ private:
 
 	std::string address_; // host of the last valid parse of address_text_
 	std::string address_text_; // the field as typed: host, host:port or [v6]:port
+	int recent_shown_ = 0;
 	std::string address_error_; // shown under the field after a failed Continue
 	int port_ = 27015;
 	bool address_edit_ = true; // focused on entry so Enter works immediately

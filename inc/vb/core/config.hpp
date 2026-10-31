@@ -144,6 +144,10 @@ Result<ClientConfig, CoreError> load_client_config(const std::string &path);
 // Overwrite `path` with `config` serialized as TOML (used by the client
 // Settings screen + recent-servers list, spec §5.3). Comments in an existing
 // file are not preserved -- this regenerates the file from scratch.
+// Moves `server` ("host:port") to the front of `config.recent_servers`, dropping any earlier copy
+// and trimming the list to kMaxServerHistory.
+void record_recent_server(ClientConfig &config, const std::string &server);
+
 Result<void, CoreError> save_client_config(const std::string &path, const ClientConfig &config);
 
 // Apply recognised CLI flags on top of a config (mutates in place).

@@ -551,6 +551,9 @@ json ClientAutomationEndpoint::state() {
 		{ "selected_slot", app_.selected_hotbar_slot() + 1 },
 		{ "busy_actions", tasks_.size() },
 	};
+	if (app_.app_state() == AppState::kMenu) {
+		s["menu"] = { { "recent_shown", app_.menu_recent_shown() }, { "recent_total", app_.recent_server_count() } };
+	}
 	if (app_.app_state() == AppState::kError) {
 		s["error_message"] = app_.error_text();
 	}
