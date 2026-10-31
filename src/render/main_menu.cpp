@@ -160,7 +160,7 @@ struct MainMenu::Assets {
 	}
 };
 
-MainMenu::MainMenu(const core::ClientConfig &config) :
+MainMenu::MainMenu(const core::ClientConfig & /*config*/) :
 		assets_(std::make_unique<Assets>()),
 		address_("127.0.0.1"),
 		address_text_("127.0.0.1") {

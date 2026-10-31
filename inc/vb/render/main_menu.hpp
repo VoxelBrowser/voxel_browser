@@ -155,7 +155,6 @@ private:
 	std::string address_error_; // shown under the field after a failed Continue
 	int port_ = 27015;
 	bool address_edit_ = true; // focused on entry so Enter works immediately
-	bool name_edit_ = false;
 	std::string signed_in_label_;
 	// Sign-in screen form state.
 	std::string si_email_;
