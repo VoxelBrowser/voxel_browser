@@ -4,6 +4,7 @@
 #include "client_app.hpp"
 
 #include "vb/auth/secret_store.hpp"
+#include "vb/core/server_address.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -531,8 +532,8 @@ void ClientApp::enter_playing() {
 		recents.erase(std::remove(recents.begin(), recents.end(), connecting_target),
 				recents.end());
 		recents.insert(recents.begin(), connecting_target);
-		if (recents.size() > 8) {
-			recents.resize(8);
+		if (recents.size() > vb::core::kMaxServerHistory) {
+			recents.resize(vb::core::kMaxServerHistory);
 		}
 	}
 	config.player_name = menu.player_name();
@@ -672,8 +673,10 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 			} else if (singleplayer_requested) {
 				VB_OBSERVE(on_menu_singleplayer(menu.player_name()));
 				begin_connect(true);
-			} else if (result.open_settings || result.open_history) {
-				// Settings > History (with the clicked entry highlighted) arrives with Phase 12.3.
+			} else if (result.open_history) {
+				menu.open_settings(config, vb::render::MainMenu::SettingsSection::kHistory, result.history_index);
+				state = AppState::kSettings;
+			} else if (result.open_settings) {
 				menu.open_settings(config);
 				state = AppState::kSettings;
 			}
@@ -681,7 +684,19 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 		}
 		case AppState::kSettings: {
 			const auto result = menu.draw_settings(config);
-			if (result.save) {
+			if (result.history_changed) {
+				vb::core::save_client_config(config_path, config);
+			}
+			if (result.connect_history >= 0 &&
+					static_cast<std::size_t>(result.connect_history) < config.recent_servers.size()) {
+				if (const auto target = vb::core::parse_server_address(
+							config.recent_servers[static_cast<std::size_t>(result.connect_history)])) {
+					const std::string name = menu.player_name(); // prefill() reassigns it: pass a copy
+					menu.prefill(target->host, target->port, name);
+					VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), menu.player_name()));
+					begin_connect(false);
+				}
+			} else if (result.save) {
 				vb::core::save_client_config(config_path, config);
 				state = AppState::kMenu;
 			} else if (result.back) {

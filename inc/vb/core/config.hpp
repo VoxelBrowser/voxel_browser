@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -95,6 +96,12 @@ struct ServerConfig {
 // edges; 720 leaves a little headroom above that line.
 inline constexpr std::uint32_t kMinWindowWidth = 720;
 inline constexpr std::uint32_t kMinWindowHeight = 360;
+
+// The most recent servers kept in client.toml's `recent_servers` (the main screen shows the first
+// three; Settings > History lists them all).
+inline constexpr std::size_t kMaxServerHistory = 50;
+// Longest accepted player name (the server rejects anything longer in the handshake).
+inline constexpr std::size_t kMaxPlayerNameLength = 32;
 
 struct ClientConfig {
 	std::uint32_t window_width = 1280;

@@ -421,7 +421,11 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
       (2026-10-31: `vb::core::parse_server_address` + unit test; recent click and
       the link open Settings for now — History section is 12.3; the player-name
       field is gone from the main screen until 12.3/12.4 give it a home)
-- [ ] 12.3 Settings sections (General/Video/Controls/History), history cap 50
+- [x] 12.3 Settings sections (General/Video/Controls/History), history cap 50
+      (2026-10-31: `open_settings(config, section, highlight)`, `kMaxServerHistory`=50,
+      `kMaxPlayerNameLength`=32; Settings Save also updates the menu's in-memory
+      name until 12.4 moves ownership to `ClientApp`; slider labels drawn by hand —
+      raygui puts them left of the bar in a dark colour)
 - [ ] 12.4 `player_name` written only by Settings; CLI/automation = override
 - [ ] 12.5 remove Singleplayer (with 11.2) and Quit buttons
 - [ ] 12.6 tests (connecting-panel e2e compares against the backdrop)

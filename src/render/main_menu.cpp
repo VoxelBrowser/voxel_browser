@@ -53,6 +53,20 @@ void draw_panel(Rectangle r, const char *title) {
 	}
 }
 
+// raygui draws a slider's text to the *left* of the bar in the bar's (dark) colour; on our dark
+// panels that overlaps the neighbouring column and is unreadable, so draw the label and value
+// ourselves: label column, bar, value column.
+bool labeled_slider(float x, float y, float w, const char *label, const char *value_text, float *value,
+		float min, float max) {
+	const float label_w = 120.0f;
+	const float value_w = 70.0f;
+	GuiLabel(Rectangle{ x, y, label_w, 20.0f }, label);
+	const float before = *value;
+	GuiSlider(Rectangle{ x + label_w, y, w - label_w - value_w, 20.0f }, nullptr, nullptr, value, min, max);
+	GuiLabel(Rectangle{ x + w - value_w + 8.0f, y, value_w - 8.0f, 20.0f }, value_text);
+	return *value != before;
+}
+
 constexpr int kTextBufSize = 128;
 
 // GuiTextBox needs a fixed-capacity, nul-terminated buffer; `s` is resized to
@@ -188,6 +202,18 @@ void MainMenu::ensure_assets() {
 	GuiSetStyle(DEFAULT, TEXT_SIZE, 15);
 	// Labels sit directly on the dark panels, so they need light text.
 	GuiSetStyle(LABEL, TEXT_COLOR_NORMAL, static_cast<int>(0xEDE6DCFFu));
+	GuiSetStyle(LABEL, TEXT_COLOR_FOCUSED, static_cast<int>(0x8FC8F0FFu));
+	// Text and value boxes sit on the dark panels: light text, a dark amber-bordered field while
+	// editing instead of raygui's bright cyan.
+	for (const int control : { static_cast<int>(TEXTBOX), static_cast<int>(VALUEBOX) }) {
+		GuiSetStyle(control, TEXT_COLOR_NORMAL, static_cast<int>(0xEDE6DCFFu));
+		GuiSetStyle(control, TEXT_COLOR_FOCUSED, static_cast<int>(0xFFFFFFFFu));
+		GuiSetStyle(control, TEXT_COLOR_PRESSED, static_cast<int>(0xFFFFFFFFu));
+		GuiSetStyle(control, BASE_COLOR_NORMAL, static_cast<int>(0x1E1610FFu));
+		GuiSetStyle(control, BASE_COLOR_FOCUSED, static_cast<int>(0x2A2018FFu));
+		GuiSetStyle(control, BASE_COLOR_PRESSED, static_cast<int>(0x2A2018FFu));
+		GuiSetStyle(control, BORDER_COLOR_PRESSED, static_cast<int>(0xE0B060FFu));
+	}
 }
 
 void MainMenu::draw_backdrop() {
@@ -297,7 +323,7 @@ MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_
 	return result;
 }
 
-void MainMenu::open_settings(const core::ClientConfig &config) {
+void MainMenu::open_settings(const core::ClientConfig &config, SettingsSection section, int highlight) {
 	s_width_ = static_cast<int>(config.window_width);
 	s_height_ = static_cast<int>(config.window_height);
 	s_vsync_ = config.vsync;
@@ -305,62 +331,161 @@ void MainMenu::open_settings(const core::ClientConfig &config) {
 	s_render_distance_ = static_cast<float>(config.render_distance);
 	s_sensitivity_ = static_cast<float>(config.mouse_sensitivity);
 	s_cache_mb_ = static_cast<int>(config.asset_cache_mb);
+	s_name_ = player_name_;
+	s_name_edit_ = false;
+	settings_section_ = section;
+	history_highlight_ = highlight;
+	// Put the highlighted entry a row or two down from the top so it is visibly in view.
+	history_scroll_ = std::max(0, highlight - 2);
 }
 
 MainMenu::SettingsResult MainMenu::draw_settings(core::ClientConfig &config) {
 	draw_backdrop();
 	SettingsResult result;
 
-	const float panel_w = 460.0f;
-	draw_panel(centered(panel_w, 420.0f, 80.0f), "Settings");
+	const float screen_w = static_cast<float>(GetScreenWidth());
+	const float screen_h = static_cast<float>(GetScreenHeight());
+	const float panel_w = std::min(600.0f, screen_w - 24.0f);
+	const float panel_h = std::min(420.0f, screen_h - 24.0f);
+	const float px = (screen_w - panel_w) * 0.5f;
+	const float py = (screen_h - panel_h) * 0.5f;
+	draw_panel(Rectangle{ px, py, panel_w, panel_h }, "Settings");
 
-	float y = 130.0f;
-	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
-	const float field_w = panel_w - 40.0f;
-
-	GuiLabel(Rectangle{ x, y, field_w * 0.5f, 24.0f }, "Window width (applies on restart)");
-	if (GuiValueBox(Rectangle{ x + field_w * 0.55f, y, field_w * 0.2f, 24.0f }, nullptr,
-				&s_width_, 640, 3840, s_width_edit_) != 0) {
-		s_width_edit_ = !s_width_edit_;
+	// Section list on the left.
+	const float nav_w = 120.0f;
+	const char *names[4] = { "General", "Video", "Controls", "History" };
+	const SettingsSection sections[4] = { SettingsSection::kGeneral, SettingsSection::kVideo,
+		SettingsSection::kControls, SettingsSection::kHistory };
+	float ny = py + 34.0f;
+	for (int i = 0; i < 4; ++i) {
+		const bool active = settings_section_ == sections[i];
+		if (active) {
+			DrawRectangleRounded(Rectangle{ px + 10.0f, ny, nav_w, 30.0f }, 0.2f, 6, Color{ 255, 255, 255, 40 });
+		}
+		if (GuiLabelButton(Rectangle{ px + 18.0f, ny, nav_w - 16.0f, 30.0f }, names[i])) {
+			settings_section_ = sections[i];
+		}
+		ny += 34.0f;
 	}
-	if (GuiValueBox(Rectangle{ x + field_w * 0.78f, y, field_w * 0.2f, 24.0f }, nullptr,
-				&s_height_, 480, 2160, s_height_edit_) != 0) {
-		s_height_edit_ = !s_height_edit_;
+
+	// Content area to the right of the section list, above the footer.
+	const float cx = px + nav_w + 30.0f;
+	const float cw = panel_w - nav_w - 50.0f;
+	const float footer_h = 44.0f;
+	const float content_top = py + 34.0f;
+	const float content_bottom = py + panel_h - footer_h;
+	float y = content_top;
+
+	const bool name_ok = !s_name_.empty() && s_name_.size() <= core::kMaxPlayerNameLength;
+
+	switch (settings_section_) {
+		case SettingsSection::kGeneral: {
+			GuiLabel(Rectangle{ cx, y, cw, 22.0f }, "Default player name");
+			y += 24.0f;
+			text_box(Rectangle{ cx, y, cw, 30.0f }, s_name_, s_name_edit_);
+			y += 34.0f;
+			if (!name_ok) {
+				DrawTextEx(assets_->ui_font,
+						s_name_.empty() ? "Enter a name" : "Name must be at most 32 characters",
+						Vector2{ cx + 2.0f, y }, 14.0f, 0.0f, Color{ 0xFF, 0x8A, 0x7A, 255 });
+			}
+			y += 26.0f;
+			GuiLabel(Rectangle{ cx, y, cw * 0.55f, 24.0f }, "Asset cache (MB)");
+			if (GuiValueBox(Rectangle{ cx + cw * 0.6f, y, cw * 0.4f, 24.0f }, nullptr, &s_cache_mb_, 64, 8192,
+						s_cache_edit_) != 0) {
+				s_cache_edit_ = !s_cache_edit_;
+			}
+			break;
+		}
+		case SettingsSection::kVideo: {
+			GuiLabel(Rectangle{ cx, y, cw * 0.5f, 24.0f }, "Window size (on restart)");
+			if (GuiValueBox(Rectangle{ cx + cw * 0.55f, y, cw * 0.2f, 24.0f }, nullptr, &s_width_, 640, 3840,
+						s_width_edit_) != 0) {
+				s_width_edit_ = !s_width_edit_;
+			}
+			if (GuiValueBox(Rectangle{ cx + cw * 0.78f, y, cw * 0.2f, 24.0f }, nullptr, &s_height_, 480, 2160,
+						s_height_edit_) != 0) {
+				s_height_edit_ = !s_height_edit_;
+			}
+			y += 34.0f;
+			GuiCheckBox(Rectangle{ cx, y, 20.0f, 20.0f }, "V-Sync (applies on restart)", &s_vsync_);
+			y += 34.0f;
+			char fov_label[32];
+			std::snprintf(fov_label, sizeof(fov_label), "%.0f", static_cast<double>(s_fov_));
+			labeled_slider(cx, y, cw, "FOV", fov_label, &s_fov_, 50.0f, 110.0f);
+			y += 34.0f;
+			char rd_label[32];
+			std::snprintf(rd_label, sizeof(rd_label), "%.0f chunks", static_cast<double>(s_render_distance_));
+			labeled_slider(cx, y, cw, "Render distance", rd_label, &s_render_distance_, 2.0f, 32.0f);
+			break;
+		}
+		case SettingsSection::kControls: {
+			char sens_label[32];
+			std::snprintf(sens_label, sizeof(sens_label), "%.2f", static_cast<double>(s_sensitivity_));
+			labeled_slider(cx, y + 4.0f, cw, "Sensitivity", sens_label, &s_sensitivity_, 0.02f, 0.6f);
+			y += 44.0f;
+			if (GuiButton(Rectangle{ cx, y, 160.0f, 32.0f }, "Keybindings...")) {
+				result.open_keybindings = true;
+			}
+			break;
+		}
+		case SettingsSection::kHistory: {
+			const float row_h = 30.0f;
+			const std::size_t total = config.recent_servers.size();
+			const float list_bottom = content_bottom - 34.0f; // Clear history sits underneath
+			const int visible = std::max(1, static_cast<int>((list_bottom - content_top) / row_h));
+			const Rectangle list_rect{ cx, content_top, cw, list_bottom - content_top };
+			if (total == 0) {
+				GuiLabel(Rectangle{ cx, content_top, cw, 24.0f }, "No servers yet.");
+			}
+			if (CheckCollisionPointRec(GetMousePosition(), list_rect)) {
+				history_scroll_ -= static_cast<int>(GetMouseWheelMove());
+			}
+			const int max_scroll = std::max(0, static_cast<int>(total) - visible);
+			history_scroll_ = std::clamp(history_scroll_, 0, max_scroll);
+			const float btn_w = 78.0f;
+			float ry = content_top;
+			int remove_index = -1;
+			for (int i = history_scroll_; i < static_cast<int>(total) && i < history_scroll_ + visible; ++i) {
+				if (i == history_highlight_) {
+					DrawRectangleRounded(Rectangle{ cx - 4.0f, ry, cw + 8.0f, row_h - 2.0f }, 0.2f, 6,
+							Color{ 0xE0, 0xB0, 0x60, 60 });
+				}
+				const std::string &entry = config.recent_servers[static_cast<std::size_t>(i)];
+				GuiLabel(Rectangle{ cx + 4.0f, ry, cw - 2.0f * btn_w - 16.0f, row_h - 2.0f }, entry.c_str());
+				if (GuiButton(Rectangle{ cx + cw - 2.0f * btn_w - 6.0f, ry + 2.0f, btn_w, row_h - 6.0f }, "Connect")) {
+					result.connect_history = i;
+				}
+				if (GuiButton(Rectangle{ cx + cw - btn_w, ry + 2.0f, btn_w, row_h - 6.0f }, "Remove")) {
+					remove_index = i;
+				}
+				ry += row_h;
+			}
+			if (remove_index >= 0) {
+				config.recent_servers.erase(config.recent_servers.begin() + remove_index);
+				history_highlight_ = -1;
+				result.history_changed = true;
+			}
+			if (total != 0 && GuiButton(Rectangle{ cx, content_bottom - 30.0f, 140.0f, 28.0f }, "Clear history")) {
+				config.recent_servers.clear();
+				history_highlight_ = -1;
+				result.history_changed = true;
+			}
+			break;
+		}
 	}
-	y += 32.0f;
 
-	GuiCheckBox(Rectangle{ x, y, 20.0f, 20.0f }, "V-Sync (applies on restart)", &s_vsync_);
-	y += 34.0f;
-
-	char fov_label[32];
-	std::snprintf(fov_label, sizeof(fov_label), "%.0f", static_cast<double>(s_fov_));
-	GuiSlider(Rectangle{ x, y, field_w, 20.0f }, "FOV", fov_label, &s_fov_, 50.0f, 110.0f);
-	y += 32.0f;
-
-	char rd_label[32];
-	std::snprintf(rd_label, sizeof(rd_label), "%.0f chunks",
-			static_cast<double>(s_render_distance_));
-	GuiSlider(Rectangle{ x, y, field_w, 20.0f }, "Render distance", rd_label,
-			&s_render_distance_, 2.0f, 32.0f);
-	y += 32.0f;
-
-	char sens_label[32];
-	std::snprintf(sens_label, sizeof(sens_label), "%.2f", static_cast<double>(s_sensitivity_));
-	GuiSlider(Rectangle{ x, y, field_w, 20.0f }, "Sensitivity", sens_label, &s_sensitivity_,
-			0.02f, 0.6f);
-	y += 32.0f;
-
-	GuiLabel(Rectangle{ x, y, field_w * 0.55f, 24.0f }, "Asset cache (MB)");
-	if (GuiValueBox(Rectangle{ x + field_w * 0.6f, y, field_w * 0.4f, 24.0f }, nullptr,
-				&s_cache_mb_, 64, 8192, s_cache_edit_) != 0) {
-		s_cache_edit_ = !s_cache_edit_;
+	// Footer.
+	const float fy = py + panel_h - footer_h + 6.0f;
+	if (GuiButton(Rectangle{ px + panel_w - 2.0f * 110.0f - 22.0f, fy, 110.0f, 32.0f }, "Back")) {
+		result.back = true;
 	}
-	y += 44.0f;
-
-	if (GuiButton(Rectangle{ x, y, field_w * 0.3f, 32.0f }, "Keybindings")) {
-		result.open_keybindings = true;
+	if (!name_ok) {
+		GuiDisable();
 	}
-	if (GuiButton(Rectangle{ x + field_w * 0.34f, y, field_w * 0.3f, 32.0f }, "Save")) {
+	const bool save_clicked = GuiButton(Rectangle{ px + panel_w - 110.0f - 12.0f, fy, 110.0f, 32.0f }, "Save");
+	GuiEnable();
+	if (save_clicked && name_ok) {
 		config.window_width = static_cast<std::uint32_t>(s_width_);
 		config.window_height = static_cast<std::uint32_t>(s_height_);
 		config.vsync = s_vsync_;
@@ -368,10 +493,9 @@ MainMenu::SettingsResult MainMenu::draw_settings(core::ClientConfig &config) {
 		config.render_distance = static_cast<std::uint32_t>(s_render_distance_);
 		config.mouse_sensitivity = static_cast<double>(s_sensitivity_);
 		config.asset_cache_mb = static_cast<std::uint32_t>(s_cache_mb_);
+		config.player_name = s_name_;
+		player_name_ = s_name_; // the next connect uses it (Phase 12.4 moves this to ClientApp)
 		result.save = true;
-	}
-	if (GuiButton(Rectangle{ x + field_w * 0.68f, y, field_w * 0.32f, 32.0f }, "Back")) {
-		result.back = true;
 	}
 
 	return result;

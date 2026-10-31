@@ -56,14 +56,25 @@ public:
 	const std::string &player_name() const { return player_name_; }
 
 	// --- settings screen -------------------------------------------------
+	// Sections down the left; Back / Save in the footer (Phase 12.3).
+	enum class SettingsSection { kGeneral,
+		kVideo,
+		kControls,
+		kHistory };
 	struct SettingsResult {
 		bool save = false;
 		bool back = false;
 		bool open_keybindings = false;
+		// History > Remove / Clear history edited config.recent_servers in place; persist it.
+		bool history_changed = false;
+		// History > Connect on this entry (index into config.recent_servers), else -1.
+		int connect_history = -1;
 	};
 	// `config` is read on entry (call once when opening the screen) and, on
-	// `save`, filled in with the edited values for the caller to persist.
-	void open_settings(const core::ClientConfig &config);
+	// `save`, filled in with the edited values for the caller to persist. `highlight` is the
+	// History entry to mark (-1 none); opening on kHistory scrolls it into view.
+	void open_settings(const core::ClientConfig &config,
+			SettingsSection section = SettingsSection::kGeneral, int highlight = -1);
 	SettingsResult draw_settings(core::ClientConfig &config);
 
 	// --- keybindings screen (5.3) ----------------------------------------
@@ -162,6 +173,11 @@ private:
 	float s_render_distance_ = 8.0f;
 	float s_sensitivity_ = 0.12f;
 	int s_cache_mb_ = 512;
+	std::string s_name_ = "Player";
+	bool s_name_edit_ = false;
+	SettingsSection settings_section_ = SettingsSection::kGeneral;
+	int history_highlight_ = -1;
+	int history_scroll_ = 0; // first visible History row
 	bool s_width_edit_ = false;
 	bool s_height_edit_ = false;
 	bool s_cache_edit_ = false;
