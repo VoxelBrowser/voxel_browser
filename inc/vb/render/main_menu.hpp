@@ -27,7 +27,7 @@ public:
 
 	// Pre-fills the connect fields (e.g. from CLI overrides) before the first
 	// draw_main() call.
-	void prefill(std::string_view address, int port, std::string_view player_name);
+	void prefill(std::string_view address, int port);
 	// The parsed host / port of the address field (the last valid parse; prefill() values until
 	// the player edits it).
 
@@ -53,7 +53,6 @@ public:
 
 	const std::string &address() const { return address_; }
 	int port() const { return port_; }
-	const std::string &player_name() const { return player_name_; }
 
 	// --- settings screen -------------------------------------------------
 	// Sections down the left; Back / Save in the footer (Phase 12.3).
@@ -155,7 +154,6 @@ private:
 	std::string address_text_; // the field as typed: host, host:port or [v6]:port
 	std::string address_error_; // shown under the field after a failed Continue
 	int port_ = 27015;
-	std::string player_name_;
 	bool address_edit_ = true; // focused on entry so Enter works immediately
 	bool name_edit_ = false;
 	std::string signed_in_label_;

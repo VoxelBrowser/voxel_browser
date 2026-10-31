@@ -177,7 +177,7 @@ int run_headless(const vb::core::ClientConfig &config, const vb::core::Args &arg
 	vb::render::Window window(wcfg);
 
 	ClientApp app(config, "", window, server, port, view_distance, singleplayer,
-			/*render*/ false, auth_token_file);
+			/*render*/ false, auth_token_file, args.value_or("name", ""));
 	if (!app.connect_blocking()) {
 		return EXIT_FAILURE;
 	}
@@ -364,7 +364,7 @@ int main(int argc, char **argv) {
 		auto_connect = singleplayer;
 	}
 	ClientApp app(config, config_path, window, cli_server, cli_port,
-			configured_view_distance, auto_connect, /*render*/ true, auth_token_file);
+			configured_view_distance, auto_connect, /*render*/ true, auth_token_file, args.value_or("name", ""));
 	vb::render::RaylibInput raylib_input;
 
 #if defined(VB_WITH_AUTOMATION)

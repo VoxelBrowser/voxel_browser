@@ -163,8 +163,7 @@ struct MainMenu::Assets {
 MainMenu::MainMenu(const core::ClientConfig &config) :
 		assets_(std::make_unique<Assets>()),
 		address_("127.0.0.1"),
-		address_text_("127.0.0.1"),
-		player_name_(config.player_name) {
+		address_text_("127.0.0.1") {
 }
 
 MainMenu::~MainMenu() = default;
@@ -229,12 +228,11 @@ void MainMenu::draw_backdrop() {
 	DrawRectangle(0, 0, static_cast<int>(w), static_cast<int>(h), Color{ 0, 0, 0, 140 }); // 55% black
 }
 
-void MainMenu::prefill(std::string_view address, int port, std::string_view player_name) {
+void MainMenu::prefill(std::string_view address, int port) {
 	address_ = std::string(address);
 	port_ = port;
 	address_text_ = core::format_server_address(address_, port_);
 	address_error_.clear();
-	player_name_ = std::string(player_name);
 }
 
 MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_servers) {
@@ -331,7 +329,7 @@ void MainMenu::open_settings(const core::ClientConfig &config, SettingsSection s
 	s_render_distance_ = static_cast<float>(config.render_distance);
 	s_sensitivity_ = static_cast<float>(config.mouse_sensitivity);
 	s_cache_mb_ = static_cast<int>(config.asset_cache_mb);
-	s_name_ = player_name_;
+	s_name_ = config.player_name;
 	s_name_edit_ = false;
 	settings_section_ = section;
 	history_highlight_ = highlight;
@@ -494,7 +492,6 @@ MainMenu::SettingsResult MainMenu::draw_settings(core::ClientConfig &config) {
 		config.mouse_sensitivity = static_cast<double>(s_sensitivity_);
 		config.asset_cache_mb = static_cast<std::uint32_t>(s_cache_mb_);
 		config.player_name = s_name_;
-		player_name_ = s_name_; // the next connect uses it (Phase 12.4 moves this to ClientApp)
 		result.save = true;
 	}
 

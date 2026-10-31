@@ -57,7 +57,7 @@ std::chrono::seconds connect_timeout() {
 ClientApp::ClientApp(vb::core::ClientConfig config_in, std::string config_path_in,
 		vb::render::Window &window_in, const std::string &cli_server, int cli_port,
 		int configured_view_distance_in, std::optional<bool> auto_connect, bool render_in,
-		std::optional<std::filesystem::path> auth_token_file) :
+		std::optional<std::filesystem::path> auth_token_file, std::string name_override) :
 		config(std::move(config_in)),
 		config_path(std::move(config_path_in)),
 		window(window_in),
@@ -65,6 +65,7 @@ ClientApp::ClientApp(vb::core::ClientConfig config_in, std::string config_path_i
 		fov(static_cast<float>(config.fov)),
 		render(render_in),
 		menu(config),
+		session_name_(name_override.empty() ? config.player_name : std::move(name_override)),
 		view_distance(configured_view_distance_in),
 		movement_bindings{ config.key_forward, config.key_back, config.key_left,
 			config.key_right, config.key_jump, config.key_sprint } {
@@ -73,7 +74,7 @@ ClientApp::ClientApp(vb::core::ClientConfig config_in, std::string config_path_i
 #else
 	(void)auth_token_file;
 #endif
-	menu.prefill(cli_server, cli_port, config.player_name);
+	menu.prefill(cli_server, cli_port);
 	if (auto_connect) {
 		begin_connect(*auto_connect);
 	}
@@ -94,7 +95,7 @@ void ClientApp::begin_connect(bool as_singleplayer) {
 	// S2CServerInfo says otherwise.
 	view_distance = configured_view_distance;
 	if (as_singleplayer) {
-		sp = std::make_unique<Singleplayer>(7, menu.player_name(), view_distance);
+		sp = std::make_unique<Singleplayer>(7, session_name_, view_distance);
 		connecting_target = "singleplayer";
 		if (!sp->world_error.empty()) {
 			error_message = sp->world_error;
@@ -111,7 +112,7 @@ void ClientApp::begin_connect(bool as_singleplayer) {
 		connecting_target = menu.address() + ':' + std::to_string(menu.port());
 		std::cout << "client: connecting to " << connecting_target << "...\n";
 		remote = std::make_unique<RemoteConnection>(menu.address(),
-				static_cast<std::uint16_t>(menu.port()), menu.player_name(), config);
+				static_cast<std::uint16_t>(menu.port()), session_name_, config);
 		connect_deadline = std::chrono::steady_clock::now() + connect_timeout();
 		if (!remote->session) {
 			error_message = "Could not connect to " + connecting_target +
@@ -536,7 +537,6 @@ void ClientApp::enter_playing() {
 			recents.resize(vb::core::kMaxServerHistory);
 		}
 	}
-	config.player_name = menu.player_name();
 	// Headless never touched client.toml (CI / tests must not rewrite it).
 	if (render) {
 		if (auto saved = vb::core::save_client_config(config_path, config); !saved) {
@@ -668,10 +668,10 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 			singleplayer_requested = std::exchange(pending_singleplayer, false);
 #endif
 			if (result.connect) {
-				VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), menu.player_name()));
+				VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), session_name_));
 				begin_connect(false);
 			} else if (singleplayer_requested) {
-				VB_OBSERVE(on_menu_singleplayer(menu.player_name()));
+				VB_OBSERVE(on_menu_singleplayer(session_name_));
 				begin_connect(true);
 			} else if (result.open_history) {
 				menu.open_settings(config, vb::render::MainMenu::SettingsSection::kHistory, result.history_index);
@@ -691,12 +691,12 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 					static_cast<std::size_t>(result.connect_history) < config.recent_servers.size()) {
 				if (const auto target = vb::core::parse_server_address(
 							config.recent_servers[static_cast<std::size_t>(result.connect_history)])) {
-					const std::string name = menu.player_name(); // prefill() reassigns it: pass a copy
-					menu.prefill(target->host, target->port, name);
-					VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), menu.player_name()));
+					menu.prefill(target->host, target->port);
+					VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), session_name_));
 					begin_connect(false);
 				}
 			} else if (result.save) {
+				session_name_ = config.player_name; // a saved default replaces any --name override
 				vb::core::save_client_config(config_path, config);
 				state = AppState::kMenu;
 			} else if (result.back) {
@@ -1057,7 +1057,7 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				}
 				// The server's name for us (v33), which auth or "#2" may have changed.
 				const auto &accept = client->join_accept();
-				const std::string &own = accept && !accept->your_name.empty() ? accept->your_name : config.player_name;
+				const std::string &own = accept && !accept->your_name.empty() ? accept->your_name : session_name_;
 				ui_runtime.set_player_list(own, std::move(other_names));
 #if defined(VB_WITH_AUTH)
 				const std::string subject = sign_in ? sign_in->signed_in_subject() : std::string();

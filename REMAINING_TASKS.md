@@ -426,7 +426,10 @@ benefit; a comment on `Singleplayer` notes it backs `--loopback`.
       `kMaxPlayerNameLength`=32; Settings Save also updates the menu's in-memory
       name until 12.4 moves ownership to `ClientApp`; slider labels drawn by hand —
       raygui puts them left of the bar in a dark colour)
-- [ ] 12.4 `player_name` written only by Settings; CLI/automation = override
+- [x] 12.4 `player_name` written only by Settings; CLI/automation = override
+      (2026-10-31: `ClientApp::session_name_`; `apply_cli_overrides` no longer applies
+      `--name`; empty automation `name` keeps the current one; e2e
+      `test_menu_name_override_is_session_only`)
 - [ ] 12.5 remove Singleplayer (with 11.2) and Quit buttons
 - [ ] 12.6 tests (connecting-panel e2e compares against the backdrop)
 - [ ] 12.7 docs

@@ -249,7 +249,8 @@ void apply_cli_overrides(ServerConfig &config, const Args &args) {
 }
 
 void apply_cli_overrides(ClientConfig &config, const Args &args) {
-	config.player_name = args.value_or("name", config.player_name);
+	// `--name` is deliberately not applied here: it is a session-only override handled by ClientApp,
+	// so it can never be written back to client.toml (Settings is the only writer of player_name).
 	config.window_width = static_cast<std::uint32_t>(
 			args.int_or("width", static_cast<int>(config.window_width)));
 	config.window_height = static_cast<std::uint32_t>(

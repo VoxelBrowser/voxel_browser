@@ -181,6 +181,8 @@ TEST_CASE("client CLI overrides") {
 	ClientConfig cfg;
 	const auto args = make_args({ "cl", "--name", "Zed", "--fov", "100" });
 	apply_cli_overrides(cfg, args);
-	CHECK(cfg.player_name == "Zed");
+	// --name is a session-only override that ClientApp applies itself; it must never land in the
+	// config that Settings / the join path write back to client.toml (Phase 12.4).
+	CHECK(cfg.player_name == "Player");
 	CHECK(cfg.fov == doctest::Approx(100.0));
 }

@@ -5,6 +5,7 @@ raygui reads raylib's real mouse state, which a script can't produce, so the men
 inject the *result* of a click (and fill the same fields a player would type into).
 """
 import pathlib
+import re
 import time
 
 import pytest
@@ -36,6 +37,18 @@ def test_main_menu_connect_and_world_screenshots(server, clients, artifact_dir):
     world = stats(world_shot["path"])
     assert world["distinct_colors"] >= 40, "the in-game screenshot looks blank: %r" % world
     assert world["mean_rgb"] != menu["mean_rgb"], "the screenshot did not change after joining"
+
+def test_menu_name_override_is_session_only(server, clients):
+    """Settings is the only writer of client.toml's player_name: a name handed to the menu
+    (what --name / menu.connect{name} do) is used for this connection but never saved."""
+    (alice,) = clients(1, names=["Alice"], via_menu=True)
+    alice.menu_connect("127.0.0.1", server.port, name="Bob")
+    expect(alice).to_be_in_state("playing", timeout=60)
+    assert server.player("Bob") is not None
+    conf = alice.config_path.read_text()
+    assert re.search(r"""player_name = ['"]Alice['"]""", conf), conf
+    assert "127.0.0.1:%d" % server.port in conf, conf  # the join did save the config (recent servers)
+
 
 
 def test_connecting_panel_fits_on_screen(server, clients, artifact_dir):

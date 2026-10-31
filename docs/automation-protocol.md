@@ -134,7 +134,7 @@ commands inject the *result* of a click and fill the fields a player would type 
 
 | Command | Args → result |
 |---|---|
-| `menu.set_name` | `{name}` → `{}` |
+| `menu.set_name` | `{name}` → `{}`; a session-only override of the name the next connection uses (never written to `client.toml`; Settings is its only writer) |
 | `menu.connect` | `{host, port, name?}` → `{}`; the transition shows up in `app_state` (`connecting` → `loading` → `playing`; the loading screen needs frames to mesh the first chunks) |
 | `menu.loopback` | `{name?}` → `{}`; starts the in-process loopback diagnostic (`menu.singleplayer` is the old name; no menu button exists) |
 | `signin.trust` / `signin.browser` / `signin.cancel` | `{}` → `{}`; the engine-drawn sign-in screen's *Continue* (first-use trust prompt), *Sign in with your browser* (or *with Google*) and *Cancel*, acted on by the next frame like the click. `unavailable` when that button is not on screen (read `auth` first). Builds with `VB_WITH_AUTH`; a headless client answers the trust prompt and starts the browser flow by itself |

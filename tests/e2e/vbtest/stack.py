@@ -136,6 +136,7 @@ class ClientFactory:
             c = Client("client-" + name, argv, self.artifact_dir, env=env, tcp=tcp)
             c.player_name = name
             c.cache_dir = cache
+            c.config_path = conf
             self.procs.append(c)
             made.append(c)
         for c in made:
