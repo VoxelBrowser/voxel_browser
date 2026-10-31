@@ -20,6 +20,7 @@ add_executable(vb_tests
   unit/chunk_codec_test.cpp
   unit/cli_test.cpp
   unit/config_test.cpp
+  unit/server_address_test.cpp
   unit/content_base_behaviour_test.cpp
   unit/content_base_data_test.cpp
   unit/content_base_ui_test.cpp
@@ -148,7 +149,7 @@ if(VB_BUILD_SERVER)
   add_test(NAME server_smoke COMMAND voxel_browser_server --ticks 2 --tick-rate 60)
 endif()
 if(VB_BUILD_CLIENT)
-  # No --singleplayer / --server given -> the client tries to reach the
+  # No --loopback / --server given -> the client tries to reach the
   # default 127.0.0.1:27015, where nothing is listening. That's now a real
   # connection attempt (Phase 1.2's GnsTransport), so this smoke-tests the
   # graceful-failure path instead of a successful run: without VB_WITH_NET it
@@ -160,7 +161,7 @@ if(VB_BUILD_CLIENT)
     PASS_REGULAR_EXPRESSION "client: (could not connect|join failed)"
     TIMEOUT 30)
   add_test(NAME singleplayer_smoke
-    COMMAND voxel_browser --headless --frames 2 --singleplayer --name CiBot
+    COMMAND voxel_browser --headless --frames 2 --loopback --name CiBot
             --render-distance 2)
   set_tests_properties(singleplayer_smoke PROPERTIES
     PASS_REGULAR_EXPRESSION "joined singleplayer" TIMEOUT 60)

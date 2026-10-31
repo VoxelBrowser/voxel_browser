@@ -8,6 +8,7 @@ add_library(vb_core STATIC
   config.cpp
   log.cpp
   paths.cpp
+  server_address.cpp
   sha256.cpp
   version_req.cpp
 )

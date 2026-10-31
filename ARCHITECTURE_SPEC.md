@@ -69,6 +69,8 @@ it, with a separate sandboxed Lua VM driving UI only.
 **No separate singleplayer code path** — the same binary hosts an integrated
 server on `localhost` for singleplayer and connects to it through the normal
 socket path.
+Phase 11: this in-process path is a hidden diagnostic, `--loopback` (alias
+`--singleplayer`, no menu button), for isolating netcode — not a play mode.
 
 Repo layout: `inc/vb/<module>/` mirrors `src/<module>/`
 (`core/world/worldgen/ecs/net/replication/assetsync/script/protocol/render`);
@@ -307,20 +309,11 @@ worker-thread pool builds per-face-culled buffers with baked light/AO from
 main-thread-only, budgeted per frame; frustum + distance culling; transparent
 blocks in a back-to-front second pass.
 
-**Entity rendering — billboard sprites, decided 2026-09-11 (Q7, open-
-questions doc):** players and Lua entity kinds are Don't-Starve-style flat
-billboards (`DrawBillboardPro`, fixed world-up, confirmed against raylib
-5.5's `rmodels.c`), not 3D models. `facings` (4 or 8) buckets camera-bearing-
-minus-entity-yaw into a pose, with hysteresis against flicker; unauthored
-mirror poses come from negative-`size.x`. Animation priority is fixed:
-`dead > hurt_pulse > acting > jump/fall > run > walk > idle`, driven by
-`vel`+`flags`. Defined per-kind via `vb.register_entity{visual = {...}}`
-(closed frame-size-variant set, `facings` rows, `clips` list, validated
-against real PNG dimensions at load), with an optional per-instance
-`ScriptState.visual_override` merge (e.g. skins). Ships against a hardcoded
-placeholder (Phase 3) ahead of real Lua art (Phase 4.2/4.4/5.1). Out of
-scope for v1: skeletal animation, per-limb equipment, blob shadows,
-per-entity dynamic lighting.
+**Entity rendering — billboard sprites (Q7, decided 2026-09-11):** players and Lua entity kinds
+are Don't-Starve-style flat billboards (`DrawBillboardPro`), not 3D models; per-kind
+`vb.register_entity{visual = {...}}` with a fixed animation priority. Full text, priority
+order and out-of-scope list: `architecture_spec/rendering.md` "§10 text moved from
+ARCHITECTURE_SPEC.md (2026-10-31)".
 
 **Frame loop:** poll input → sample+push+send `InputCmd` → predict local
 player → recv network → apply snapshots/reconcile/chunk-deltas → interpolate
@@ -330,6 +323,11 @@ debug overlay) → present. Target 60 FPS, decoupled from the 20 Hz tick.
 
 Full billboard/spritesheet design (frame-size variant table, per-kind
 `visual` schema, per-instance override mechanics): `architecture_spec/rendering.md`.
+
+**Menu screens (Phase 12, implemented 2026-10-31):** search-engine-style home (title,
+address bar + Continue, 3 recent servers that open Settings › History,
+Settings bottom-left) over a tiled dirt backdrop on every non-gameplay
+screen; design in `architecture_spec/rendering.md` §11.6.
 
 ---
 
@@ -385,7 +383,8 @@ same commit as any message change.**
 
 **Client** (`client.toml`, local only, never synced): window size, vsync,
 FOV, render distance (clamped to server), mouse sensitivity, keybindings,
-asset cache size cap, last-connected servers list.
+asset cache size cap, default player name, server history (newest
+first; the menu shows 3, Settings › History all).
 
 Installing, versioning and hosting through the user-scoped `vb` developer
 CLI (install layout under the per-user data/config dirs, server instances,
@@ -476,6 +475,7 @@ servers to the extent practical (no code exec, no arbitrary FS writes).
 | 5 | Persistence: region file format | **Resolved 2026-09-25: flat files, not LMDB** (reversing the 2026-09-17 direction note after implementation review) — `vb::world::RegionStore` groups chunks into one file per X/Z region (Y ungrouped), reusing the existing palette+RLE chunk codec as-is, no new FetchContent dependency. Only edited chunks (`Chunk::revision() > 0`) are ever written. See `REMAINING_TASKS.md`'s Phase 7.6 for the full writeup. LZ4 framing of region-file payloads (format version 1 -> 2) and `--singleplayer`'s integrated server wiring to a real `RegionStore` both resolved 2026-09-28 — no open sub-item left |
 | 6 | Account/auth: `auth_mode = none \| token` | **Direction revised 2026-10-05:** a pack-level `auth.lua` declares an external identity provider (OIDC/Keycloak/Firebase); its presence makes engine-verified auth mandatory before world load, and scripts read `player:get_login()` (`nil` = no auth). Planned as Phase 9 — `architecture_spec/auth.md`. The 2026-09-17 note (engine owns no auth; packs build login on `vb.db`) is superseded for mandatory auth; `vb.db` logins still work as pack-level identity |
 | 7 | Entity visual presentation: 3D models vs. 2D sprites | **Resolved 2026-09-11: Don't Starve-style billboards** — full design in §10 above |
+| 8 | In-process server: product mode ("singleplayer") vs. diagnostic | **Diagnostic (Phase 11, 2026-10-27).** Removed from the menu, flag renamed `--loopback` (`--singleplayer` alias) — the product is multiplayer-first and `vb pack dev` already hosts a real server. Plan: `REMAINING_TASKS.md` Phase 11 |
 
 Full resolution write-ups and reasoning for every row:
 `architecture_spec/open-questions.md`.

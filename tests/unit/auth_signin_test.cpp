@@ -511,8 +511,7 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 			return r;
 		}
 	};
-	SignInCoordinator::Options o;
-	SignInRig rig(std::move(o));
+	SignInRig rig{ SignInCoordinator::Options{} };
 	// Swap in the form-aware fake (the rig's coordinator was built with FakeIdp).
 	SignInCoordinator::Options o2;
 	o2.http = std::make_shared<Idp>();
@@ -530,7 +529,8 @@ TEST_CASE("coordinator: firebase password form, retry after a wrong password, th
 	CHECK(rig.hs->poll().send.empty()); // nothing chosen yet
 
 	rig.coord->start_password("a@b.io", "badpw");
-	CHECK(rig.coord->phase() == SignInCoordinator::Phase::kWorking);
+	// No kWorking check here: the fake IdP answers instantly, so the worker can already have
+	// finished by now (a race on macOS CI). The loop below waits out the transition either way.
 	for (int i = 0; i < 200 && rig.coord->phase() == SignInCoordinator::Phase::kWorking; ++i) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(5));
 	}
@@ -635,8 +635,7 @@ TEST_CASE("coordinator: firebase google sign-in goes through Google, then signIn
 }
 
 TEST_CASE("coordinator: cancel ends the join with 'sign-in cancelled'") {
-	SignInCoordinator::Options o;
-	SignInRig rig(std::move(o));
+	SignInRig rig{ SignInCoordinator::Options{} };
 	rig.deliver_challenge("keycloak");
 	CHECK(rig.coord->supports_browser());
 	rig.coord->cancel();

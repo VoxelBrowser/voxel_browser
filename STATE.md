@@ -27,42 +27,14 @@ screens, physics-driven policy like fall damage, anything behind
 `client.screen_size()` or raw pixels), **drive it through the real windowed
 automation harness (`tests/e2e`, `docs/e2e-automation.md`) and look at an
 actual screenshot before calling it fixed**, not just reasoning about the code
-or trusting a unit test that synthesizes the inputs. Concrete misses from one
-session (2026-10-05) that code-reading and unit tests alone did not catch:
+or trusting a unit test that synthesizes the inputs.
 
-- A HUD scaling fix *looked* right by inspection but silently drew nothing in
-  a real client — `build-e2e` was a stale binary built before a
-  `client.health()` Lua binding it depended on had landed, so every HUD frame
-  threw a Lua error. Only a real screenshot surfaced the empty HUD; nothing
-  about the Lua or C++ diffs themselves would have shown it.
-- A status-bar width fix (anchoring to the full hotbar row instead of however
-  many slots are filled) introduced a new overflow at the engine's own
-  enforced minimum window width — caught by screenshotting a fully-stocked
-  9-slot hotbar at that floor, not by re-reading the arithmetic.
-- `tests/unit/content_base_behaviour_test.cpp`'s fall-damage test drives
-  `player_landed` by setting velocity directly (`BasePackFixture::land()`),
-  which exercises the *policy curve* but not the actual jump-launch-speed /
-  landing-speed round trip through real physics — the real bug (jumping on
-  flat ground took damage because `SAFE_SPEED` sat below the engine's own
-  `jump_speed`) needed a real `key.press("jump")` through a real client to
-  reproduce and confirm fixed.
-- That same e2e jump test raced its own assertion: checking health
-  immediately after `on_ground` flips back to `true` missed the damage,
-  which lands a tick or two later — confirmed by hand that an immediate
-  check silently passed against the *known-buggy* code. Absence-of-an-event
-  assertions need a real settle window; presence-of-an-event ones should use
-  `wait_for`/`expect` as usual (no fixed sleeps there).
-- Raw input automation (`key.press`/`key.hold`) does **not** auto-capture the
-  mouse the way `walk_to`/`break_block`/`select_slot` do (by design — see
-  `docs/automation-protocol.md`'s `mouse.capture` row) — a test driving
-  movement/jump via raw `key.press` silently no-ops (zero position change,
-  `on_ground` never changes) until `client.capture_mouse()` is called first,
-  same as a real player who hasn't clicked the window.
-
-None of these would have been caught by re-reading the diff more carefully or
-by the existing unit-test suite; they needed a real client process, a real
-screenshot, or a real multi-tick wait. Treat "I reasoned through the code and
-it looks right" as a hypothesis, not a result, for anything in this category.
+(Five concrete misses from 2026-10-05 — an empty HUD from a stale `build-e2e` binary, a status-bar
+overflow at the minimum window width, a fall-damage test that bypassed real physics, an immediate
+absence-of-event assertion that passed against buggy code, and raw `key.press` no-opping without
+`client.capture_mouse()` — are written up in `state/gotchas.md` "e2e verification: concrete misses".
+Treat "I reasoned through the code and it looks right" as a hypothesis, not a result, for anything
+a player would see or feel.)
 
 ---
 
@@ -94,6 +66,15 @@ content-only (e.g. the user explicitly asks for a content-pack feature).
   feature-branch push alone triggers nothing — open a PR, push to a
   `*-workflow` branch, or dispatch manually). Windows (Winsock code) and
   macOS are unbuilt.
+- **Main menu redesign (Phase 12) landed** 2026-10-31 (12.1–12.7): design
+  `architecture_spec/rendering.md` §11.6, detail `remaining_tasks/phase12.md`.
+  Traps: Settings is the only writer of `player_name` (`ClientApp::session_name_`
+  holds `--name`/automation overrides); `MainMenu` loads its backdrop/fonts lazily
+  on the first draw (needs a GL context); the macOS job is Clang `-Werror`
+  (unused private fields) — check changed files with `clang++ -fsyntax-only -Wall
+  -Wextra -Werror -Wunused-private-field` using a build dir's `flags.make`;
+  menu screenshots can be taken without the harness via `xvfb-run` + `xdotool`
+  (hold the button ~250 ms: a same-frame press/release is not seen by raygui).
 - **In-engine auth (Phase 9) landed** 2026-10-05/06 — see
   `REMAINING_TASKS.md` Phase 9 for what is still open, `docs/auth.md` for
   operators.
@@ -345,6 +326,10 @@ Other undecided:
   spawns a child process — **currently: in-process library**
   (`Singleplayer` in `src/client/session_host.hpp` constructs
   `LoopbackNetwork`/`ServerSession`/`ClientSession` directly).
+  Direction (2026-10-25): it's a netcode-isolation diagnostic, not a play
+  mode — Phase 11 (11.1–11.3 done 2026-10-27) hid it from the menu and
+  renamed the flag `--loopback` (`--singleplayer` alias); `menu.loopback`
+  automation command, `menu.singleplayer` alias kept.
 
 ---
 
@@ -446,7 +431,8 @@ newest-first within each file):
   in as the interest backend and flipped to default; Phase 6 design-only
   passes (entity classes, UI immediate-mode, keybind channel, `vb.db`,
   block-damage breaking, worldgen biome-selection redesign).
-- **`state/gotchas.md`** — long-form compiler/toolchain traps referenced
+- **`state/gotchas.md`** — long-form compiler/toolchain traps (and the e2e-verification
+  "concrete misses" write-up) referenced
   from §4 above (the `std::erase` MSVC-STL bug, the MSVC ternary
   ambiguity, the two independent asset-sync hash-mismatch bugs, the
   stale-comment lesson, the clang-format-untrustworthy-locally note).

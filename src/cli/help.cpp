@@ -32,7 +32,7 @@ const std::vector<CommandDoc> &command_docs() {
 		{ "unlink", "Removes a link (never touches the linked build directory).", { { "--force", "remove even if instances use it" } }, { { "vb unlink dev", "forget the link named dev" } }, {}, false },
 		{ "launch", "Starts the client of a version in the foreground with the user's shared settings and a per-user singleplayer world directory. Everything after `--` goes to the client.",
 				{ { "--version <v>", "which installed version" }, { "--connect host[:port]", "join a server instead of the main menu" } },
-				{ { "vb launch --connect localhost:7777", "join a local server" }, { "vb launch -- --singleplayer", "start singleplayer directly" } }, {}, false },
+				{ { "vb launch --connect localhost:7777", "join a local server" }, { "vb launch -- --loopback", "start the in-process loopback diagnostic" } }, {}, false },
 		{ "host", "Runs a dedicated server in the foreground (Ctrl+C stops it). With `--watch` it restarts whenever the pack changes on disk. Everything after `--` goes to the server.",
 				{ { "--version <v>", "which installed version" }, { "--port <n>", "UDP port" }, { "--pack <dir>", "content pack directory (default: the bundled base pack); each pack keeps its own world" },
 						{ "--watch", "restart the server when files in the pack change" } },

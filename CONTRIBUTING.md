@@ -80,7 +80,7 @@ A few things worth knowing that aren't obvious from a single build tree:
 - **Run a single test / a subset** with doctest's own filter, not ctest's:
   `./build/vb_tests --test-case='*crafting*'` (glob, not substring — wrap in
   `*...*`; quote it so your shell doesn't glob-expand it first).
-- **`server_smoke`/`client_smoke`/`singleplayer_smoke`** (registered in
+- **`server_smoke`/`client_smoke`/`singleplayer_smoke` (runs `--loopback`)** (registered in
   `tests/CMakeLists.txt`) start the real binaries with `--headless` and
   assert on stdout/exit behavior — they need `VB_BUILD_SERVER`/
   `VB_BUILD_CLIENT` on (both default `ON`).
