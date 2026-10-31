@@ -131,7 +131,7 @@ public:
 	void menu_singleplayer(std::string_view name) {
 		const std::string address = menu.address();
 		menu.prefill(address, menu.port(), name);
-		pending_menu = vb::render::MainMenu::MainResult{ .singleplayer = true };
+		pending_singleplayer = true;
 	}
 	// The engine-drawn sign-in screen, same idea: "trust" (Continue on the first-use
 	// prompt), "browser" (Sign in with your browser / with Google) or "cancel". The next
@@ -294,6 +294,7 @@ private:
 	bool headless_ui_eval = false;
 	std::vector<vb::script::Widget> hud_widget_cache;
 	std::optional<vb::render::MainMenu::MainResult> pending_menu;
+	bool pending_singleplayer = false; // menu.singleplayer: the main screen has no such button any more
 	std::optional<vb::render::MainMenu::SigningInResult> pending_sign_in;
 	Observer *observer = nullptr;
 	std::string screenshot_path_;

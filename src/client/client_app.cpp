@@ -662,19 +662,20 @@ bool ClientApp::frame(const vb::render::InputFrame &input, double dt) {
 				refresh_signed_in_label();
 			}
 #endif
+			bool singleplayer_requested = false;
+#if defined(VB_WITH_AUTOMATION)
+			singleplayer_requested = std::exchange(pending_singleplayer, false);
+#endif
 			if (result.connect) {
 				VB_OBSERVE(on_menu_connect(menu.address(), menu.port(), menu.player_name()));
 				begin_connect(false);
-			} else if (result.singleplayer) {
+			} else if (singleplayer_requested) {
 				VB_OBSERVE(on_menu_singleplayer(menu.player_name()));
 				begin_connect(true);
-			} else if (result.open_settings) {
+			} else if (result.open_settings || result.open_history) {
+				// Settings > History (with the clicked entry highlighted) arrives with Phase 12.3.
 				menu.open_settings(config);
 				state = AppState::kSettings;
-			} else if (result.quit) {
-				window.end_frame();
-				std::cout << "client: exited from menu\n";
-				return false;
 			}
 			break;
 		}

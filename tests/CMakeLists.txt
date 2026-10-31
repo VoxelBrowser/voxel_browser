@@ -20,6 +20,7 @@ add_executable(vb_tests
   unit/chunk_codec_test.cpp
   unit/cli_test.cpp
   unit/config_test.cpp
+  unit/server_address_test.cpp
   unit/content_base_behaviour_test.cpp
   unit/content_base_data_test.cpp
   unit/content_base_ui_test.cpp

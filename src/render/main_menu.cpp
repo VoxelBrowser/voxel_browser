@@ -9,6 +9,7 @@
 #include <raygui.h>
 #include <raylib.h>
 
+#include "vb/core/server_address.hpp"
 #include "vb/render/resources.hpp"
 
 namespace vb::render {
@@ -148,7 +149,7 @@ struct MainMenu::Assets {
 MainMenu::MainMenu(const core::ClientConfig &config) :
 		assets_(std::make_unique<Assets>()),
 		address_("127.0.0.1"),
-		port_text_("27015"),
+		address_text_("127.0.0.1"),
 		player_name_(config.player_name) {
 }
 
@@ -205,6 +206,8 @@ void MainMenu::draw_backdrop() {
 void MainMenu::prefill(std::string_view address, int port, std::string_view player_name) {
 	address_ = std::string(address);
 	port_ = port;
+	address_text_ = core::format_server_address(address_, port_);
+	address_error_.clear();
 	player_name_ = std::string(player_name);
 }
 
@@ -212,73 +215,81 @@ MainMenu::MainResult MainMenu::draw_main(const std::vector<std::string> &recent_
 	draw_backdrop();
 	MainResult result;
 
-	const float panel_w = 420.0f;
-	draw_panel(centered(panel_w, 420.0f, 80.0f), "voxel_browser");
+	const float screen_w = static_cast<float>(GetScreenWidth());
+	const float screen_h = static_cast<float>(GetScreenHeight());
+	const float field_w = std::min(520.0f, screen_w - 32.0f);
+	const float button_w = 110.0f;
+	const float row_h = 26.0f;
+	const std::size_t shown = std::min<std::size_t>(recent_servers.size(), 3);
 
-	float y = 130.0f;
-	const float x = (static_cast<float>(GetScreenWidth()) - panel_w) * 0.5f + 20.0f;
-	const float field_w = panel_w - 40.0f;
+	// Stack: title, address row, error line, recent panel. Centred vertically so it fits the
+	// 720x360 minimum window.
+	const float title_size = 56.0f;
+	const float title_h = title_size;
+	const float panel_h = shown == 0 ? 0.0f : 24.0f + row_h * static_cast<float>(shown) + 30.0f;
+	const float stack_h = title_h + 20.0f + 40.0f + 22.0f + panel_h;
+	// Leave the bottom 60 px to the Settings button so the two never overlap at the minimum height.
+	const float top = std::max(12.0f, (screen_h - 60.0f - stack_h) * 0.5f);
+	const float x = (screen_w - field_w) * 0.5f;
 
-	GuiLabel(Rectangle{ x, y, field_w, 20.0f }, "Player name");
-	y += 22.0f;
-	text_box(Rectangle{ x, y, field_w, 28.0f }, player_name_, name_edit_);
-	y += 38.0f;
+	const char *title = "Voxel Browser";
+	const Vector2 tsize = MeasureTextEx(assets_->title_font, title, title_size, 3.0f);
+	DrawTextEx(assets_->title_font, title, Vector2{ (screen_w - tsize.x) * 0.5f, top }, title_size, 3.0f,
+			Color{ 0xF4, 0xEC, 0xE0, 255 });
 
-	GuiLabel(Rectangle{ x, y, field_w, 20.0f }, "Server address");
-	y += 22.0f;
-	text_box(Rectangle{ x, y, field_w * 0.65f, 28.0f }, address_, address_edit_);
-	if (GuiValueBox(Rectangle{ x + field_w * 0.68f, y, field_w * 0.32f, 28.0f },
-				nullptr, &port_, 1, 65535, port_edit_) != 0) {
-		port_edit_ = !port_edit_;
+	float y = top + title_h + 20.0f;
+	const float input_w = field_w - button_w - 10.0f;
+	const bool toggled = text_box(Rectangle{ x, y, input_w, 40.0f }, address_text_, address_edit_);
+	const bool enter = toggled && !address_edit_ && (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER));
+	if (enter) {
+		address_edit_ = true; // keep the caret so a failed parse can be fixed right away
 	}
-	y += 40.0f;
-
-	if (GuiButton(Rectangle{ x, y, field_w, 32.0f }, "Connect")) {
-		result.connect = true;
-	}
-	y += 40.0f;
-
-	if (!recent_servers.empty()) {
-		GuiLabel(Rectangle{ x, y, field_w, 20.0f }, "Recent servers");
-		y += 22.0f;
-		std::vector<const char *> items;
-		items.reserve(recent_servers.size());
-		for (const auto &s : recent_servers) {
-			items.push_back(s.c_str());
+	const bool clicked = GuiButton(Rectangle{ x + input_w + 10.0f, y, button_w, 40.0f }, "Continue");
+	if (enter || clicked) {
+		std::string why;
+		if (const auto parsed = core::parse_server_address(address_text_, &why)) {
+			address_ = parsed->host;
+			port_ = parsed->port;
+			address_error_.clear();
+			result.connect = true;
+		} else {
+			address_error_ = why;
 		}
-		const float list_h = 84.0f;
-		const int before = recent_active_;
-		GuiListView(Rectangle{ x, y, field_w, list_h }, nullptr, &recent_scroll_,
-				&recent_active_);
-		if (recent_active_ != before && recent_active_ >= 0 &&
-				static_cast<std::size_t>(recent_active_) < recent_servers.size()) {
-			const std::string &picked = recent_servers[static_cast<std::size_t>(recent_active_)];
-			const auto colon = picked.rfind(':');
-			if (colon != std::string::npos) {
-				address_ = picked.substr(0, colon);
-				try {
-					port_ = std::stoi(picked.substr(colon + 1));
-				} catch (...) {
-				}
-			} else {
-				address_ = picked;
+	}
+	y += 40.0f + 4.0f;
+	if (!address_error_.empty()) {
+		DrawTextEx(assets_->ui_font, address_error_.c_str(), Vector2{ x + 2.0f, y }, 14.0f, 0.0f,
+				Color{ 0xFF, 0x8A, 0x7A, 255 });
+	}
+	y += 18.0f;
+
+	if (shown != 0) {
+		draw_panel(Rectangle{ x, y, field_w, panel_h }, "Recent servers");
+		float ry = y + 26.0f;
+		for (std::size_t i = 0; i < shown; ++i) {
+			if (GuiLabelButton(Rectangle{ x + 12.0f, ry, field_w - 24.0f, row_h }, recent_servers[i].c_str())) {
+				result.open_history = true;
+				result.history_index = static_cast<int>(i);
 			}
+			ry += row_h;
 		}
-		y += list_h + 10.0f;
+		if (GuiLabelButton(Rectangle{ x + 12.0f, ry + 2.0f, field_w - 24.0f, 24.0f }, "All history in Settings")) {
+			result.open_history = true;
+			result.history_index = -1;
+		}
 	}
 
-	if (GuiButton(Rectangle{ x, y, field_w * 0.48f, 32.0f }, "Settings")) {
+	if (GuiButton(Rectangle{ 16.0f, screen_h - 16.0f - 34.0f, 110.0f, 34.0f }, "Settings")) {
 		result.open_settings = true;
-	}
-	if (GuiButton(Rectangle{ x + field_w * 0.52f, y, field_w * 0.48f, 32.0f }, "Quit")) {
-		result.quit = true;
 	}
 
 	if (!signed_in_label_.empty()) {
+		// Top-right normally; bottom-right when the title would overlap it (the 360 px minimum).
 		const float w = 260.0f;
-		const float sx = std::max(8.0f, static_cast<float>(GetScreenWidth()) - w - 12.0f);
-		GuiLabel(Rectangle{ sx, 10.0f, w, 20.0f }, ("Signed in to " + signed_in_label_).c_str());
-		if (GuiButton(Rectangle{ sx, 32.0f, 100.0f, 24.0f }, "Sign out")) {
+		const float sx = std::max(8.0f, screen_w - w - 12.0f);
+		const float sy = screen_h < 480.0f ? screen_h - 12.0f - 58.0f : 10.0f;
+		GuiLabel(Rectangle{ sx, sy, w, 20.0f }, ("Signed in to " + signed_in_label_).c_str());
+		if (GuiButton(Rectangle{ sx, sy + 22.0f, 100.0f, 24.0f }, "Sign out")) {
 			result.sign_out = true;
 		}
 	}

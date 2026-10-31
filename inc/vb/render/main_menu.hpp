@@ -8,7 +8,7 @@
 #include "vb/core/config.hpp"
 #include "vb/render/input.hpp"
 
-// Engine-level main menu / connect / settings / error screens (spec §5.3),
+// Engine-level main menu / connect / settings / error screens (spec §11.6),
 // drawn with raygui. Not pack content -- no Lua involved here, unlike
 // vb::script::UiRuntime (Phase 4.5) which is what a *pack* uses to draw its
 // own screens once joined. src/client/main.cpp owns the actual app-state
@@ -28,17 +28,22 @@ public:
 	// Pre-fills the connect fields (e.g. from CLI overrides) before the first
 	// draw_main() call.
 	void prefill(std::string_view address, int port, std::string_view player_name);
+	// The parsed host / port of the address field (the last valid parse; prefill() values until
+	// the player edits it).
 
 	// --- main screen ---------------------------------------------------
 	struct MainResult {
 		bool connect = false;
-		bool singleplayer = false;
 		bool open_settings = false;
-		bool quit = false;
+		// A recent server was clicked (or the "All history" link): open Settings > History.
+		// `history_index` is the clicked entry, or -1 for the link.
+		bool open_history = false;
+		int history_index = -1;
 		bool sign_out = false; // "Sign out" of the selected server (only shown while signed_in_label is set)
 	};
-	// `recent_servers` is "host:port" strings, most-recent first; clicking one
-	// fills the address/port fields.
+	// The search-engine-style home page (Phase 12.2): title, one address field + Continue (Enter
+	// submits), the first three `recent_servers` ("host:port" strings, most-recent first) and
+	// Settings bottom-left. Clicking a recent entry neither connects nor fills the field.
 	MainResult draw_main(const std::vector<std::string> &recent_servers);
 
 	// Phase 9.6: shown top-right as "Signed in to <label>" with a Sign out
@@ -135,12 +140,12 @@ private:
 	// Tiled dirt texture under a dark scrim; every draw_* starts with it (Phase 12.1).
 	void draw_backdrop();
 
-	std::string address_;
-	std::string port_text_;
+	std::string address_; // host of the last valid parse of address_text_
+	std::string address_text_; // the field as typed: host, host:port or [v6]:port
+	std::string address_error_; // shown under the field after a failed Continue
 	int port_ = 27015;
 	std::string player_name_;
-	bool address_edit_ = false;
-	bool port_edit_ = false;
+	bool address_edit_ = true; // focused on entry so Enter works immediately
 	bool name_edit_ = false;
 	std::string signed_in_label_;
 	// Sign-in screen form state.
@@ -148,8 +153,6 @@ private:
 	std::string si_password_;
 	bool si_email_edit_ = false;
 	bool si_password_edit_ = false;
-	int recent_scroll_ = 0;
-	int recent_active_ = -1;
 
 	// Settings screen staging values (raygui widgets bind to these directly).
 	int s_width_ = 1280;
