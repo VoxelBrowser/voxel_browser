@@ -62,13 +62,15 @@ def test_connecting_panel_fits_on_screen(server, clients, artifact_dir):
         pytest.skip("never caught the client mid-connect (handshake finished too fast)")
 
     width, height, channels, rows = read_png(shot["path"])
-    bg = (18, 18, 22)  # Color{18,18,22,255}, src/render/window.cpp's ClearBackground
-    last_row = rows[-1]
-    non_bg = sum(1 for i in range(0, width * channels, channels)
-                 if tuple(last_row[i:i + 3]) != bg)
-    assert non_bg == 0, (
+    # The backdrop is the 16px dirt texture drawn 4x (src/render/main_menu.cpp draw_backdrop), so it
+    # repeats every 64 rows. Unclipped, the last row is pure backdrop and equals the row 64 above
+    # it (which is below the centred panel); a panel bleeding into it would differ.
+    last_row, ref_row = rows[-1], rows[-1 - 64]
+    differing = sum(1 for i in range(0, width * channels, channels)
+                    if tuple(last_row[i:i + 3]) != tuple(ref_row[i:i + 3]))
+    assert differing == 0, (
         "the connecting panel's bottom row bled into the window's last pixel row "
-        "(clipped off-screen): %d non-background pixels" % non_bg)
+        "(clipped off-screen): %d pixels differ from the backdrop" % differing)
 
 
 @pytest.mark.parametrize("windowed", [False, True], ids=["headless", "windowed"])
