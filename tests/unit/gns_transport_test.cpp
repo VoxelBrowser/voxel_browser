@@ -415,15 +415,17 @@ TEST_CASE("two clients within interest range replicate to each other, over "
 	REQUIRE(both_see_each_other);
 	CHECK(a.remote_entities().at(b_id).pos.x == doctest::Approx(8.0));
 
-	// Move B far away -> A should get a removal.
+	// Move B far away -> each side should get a removal. Wait for both: over real UDP the two
+	// removals travel in separate packets, so A seeing B go says nothing about B seeing A go yet.
 	server.set_player_state(b_id, vb::core::Vec3d{ 5000, 64, 0 });
-	const bool b_left = pump_until(500, [&] {
+	const bool both_left = pump_until(500, [&] {
 		server.tick(0.05);
 		a.tick(0.05);
 		b.tick(0.05);
-		return a.remote_entities().count(b_id) == 0;
+		return a.remote_entities().count(b_id) == 0 && b.remote_entities().count(a_id) == 0;
 	});
-	CHECK(b_left);
+	CHECK(both_left);
+	CHECK(a.remote_entities().count(b_id) == 0);
 	CHECK(b.remote_entities().count(a_id) == 0);
 }
 

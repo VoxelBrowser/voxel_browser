@@ -1,5 +1,6 @@
 #pragma once
 
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -7,7 +8,7 @@
 #include "vb/core/config.hpp"
 #include "vb/render/input.hpp"
 
-// Engine-level main menu / connect / settings / error screens (spec §5.3),
+// Engine-level main menu / connect / settings / error screens (spec §11.6),
 // drawn with raygui. Not pack content -- no Lua involved here, unlike
 // vb::script::UiRuntime (Phase 4.5) which is what a *pack* uses to draw its
 // own screens once joined. src/client/main.cpp owns the actual app-state
@@ -20,21 +21,29 @@ namespace vb::render {
 class MainMenu {
 public:
 	explicit MainMenu(const core::ClientConfig &config);
+	~MainMenu();
+	MainMenu(MainMenu &&) noexcept;
+	MainMenu &operator=(MainMenu &&) noexcept;
 
 	// Pre-fills the connect fields (e.g. from CLI overrides) before the first
 	// draw_main() call.
-	void prefill(std::string_view address, int port, std::string_view player_name);
+	void prefill(std::string_view address, int port);
+	// The parsed host / port of the address field (the last valid parse; prefill() values until
+	// the player edits it).
 
 	// --- main screen ---------------------------------------------------
 	struct MainResult {
 		bool connect = false;
-		bool singleplayer = false;
 		bool open_settings = false;
-		bool quit = false;
+		// A recent server was clicked (or the "All history" link): open Settings > History.
+		// `history_index` is the clicked entry, or -1 for the link.
+		bool open_history = false;
+		int history_index = -1;
 		bool sign_out = false; // "Sign out" of the selected server (only shown while signed_in_label is set)
 	};
-	// `recent_servers` is "host:port" strings, most-recent first; clicking one
-	// fills the address/port fields.
+	// The search-engine-style home page (Phase 12.2): title, one address field + Continue (Enter
+	// submits), the first three `recent_servers` ("host:port" strings, most-recent first) and
+	// Settings bottom-left. Clicking a recent entry neither connects nor fills the field.
 	MainResult draw_main(const std::vector<std::string> &recent_servers);
 
 	// Phase 9.6: shown top-right as "Signed in to <label>" with a Sign out
@@ -42,19 +51,32 @@ public:
 	// are per server). Empty = nothing drawn.
 	void set_signed_in_label(std::string label) { signed_in_label_ = std::move(label); }
 
+	// How many recent-server rows the last draw_main() showed (at most 3).
+	int recent_shown() const { return recent_shown_; }
+
 	const std::string &address() const { return address_; }
 	int port() const { return port_; }
-	const std::string &player_name() const { return player_name_; }
 
 	// --- settings screen -------------------------------------------------
+	// Sections down the left; Back / Save in the footer (Phase 12.3).
+	enum class SettingsSection { kGeneral,
+		kVideo,
+		kControls,
+		kHistory };
 	struct SettingsResult {
 		bool save = false;
 		bool back = false;
 		bool open_keybindings = false;
+		// History > Remove / Clear history edited config.recent_servers in place; persist it.
+		bool history_changed = false;
+		// History > Connect on this entry (index into config.recent_servers), else -1.
+		int connect_history = -1;
 	};
 	// `config` is read on entry (call once when opening the screen) and, on
-	// `save`, filled in with the edited values for the caller to persist.
-	void open_settings(const core::ClientConfig &config);
+	// `save`, filled in with the edited values for the caller to persist. `highlight` is the
+	// History entry to mark (-1 none); opening on kHistory scrolls it into view.
+	void open_settings(const core::ClientConfig &config,
+			SettingsSection section = SettingsSection::kGeneral, int highlight = -1);
 	SettingsResult draw_settings(core::ClientConfig &config);
 
 	// --- keybindings screen (5.3) ----------------------------------------
@@ -123,21 +145,26 @@ public:
 	void draw_loading(float fraction, std::string_view operator_title);
 
 private:
-	std::string address_;
-	std::string port_text_;
+	// Embedded dirt backdrop + UI fonts (src/render/resources), loaded lazily on the first draw
+	// because they need a live GL context. Opaque here so this header stays raylib-free.
+	struct Assets;
+	std::unique_ptr<Assets> assets_;
+	void ensure_assets();
+	// Tiled dirt texture under a dark scrim; every draw_* starts with it (Phase 12.1).
+	void draw_backdrop();
+
+	std::string address_; // host of the last valid parse of address_text_
+	std::string address_text_; // the field as typed: host, host:port or [v6]:port
+	int recent_shown_ = 0;
+	std::string address_error_; // shown under the field after a failed Continue
 	int port_ = 27015;
-	std::string player_name_;
-	bool address_edit_ = false;
-	bool port_edit_ = false;
-	bool name_edit_ = false;
+	bool address_edit_ = true; // focused on entry so Enter works immediately
 	std::string signed_in_label_;
 	// Sign-in screen form state.
 	std::string si_email_;
 	std::string si_password_;
 	bool si_email_edit_ = false;
 	bool si_password_edit_ = false;
-	int recent_scroll_ = 0;
-	int recent_active_ = -1;
 
 	// Settings screen staging values (raygui widgets bind to these directly).
 	int s_width_ = 1280;
@@ -147,6 +174,11 @@ private:
 	float s_render_distance_ = 8.0f;
 	float s_sensitivity_ = 0.12f;
 	int s_cache_mb_ = 512;
+	std::string s_name_ = "Player";
+	bool s_name_edit_ = false;
+	SettingsSection settings_section_ = SettingsSection::kGeneral;
+	int history_highlight_ = -1;
+	int history_scroll_ = 0; // first visible History row
 	bool s_width_edit_ = false;
 	bool s_height_edit_ = false;
 	bool s_cache_edit_ = false;

@@ -5,6 +5,7 @@ raygui reads raylib's real mouse state, which a script can't produce, so the men
 inject the *result* of a click (and fill the same fields a player would type into).
 """
 import pathlib
+import re
 import time
 
 import pytest
@@ -15,6 +16,17 @@ from vbtest.scene import block_under_feet
 from vbtest.stack import make_pack
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
+
+def test_main_menu_shows_only_three_recent_servers(server, clients):
+    """A long history lists every entry in Settings > History, but the main screen only shows
+    the three most recent."""
+    recents = ", ".join('"h%d.example:%d"' % (i, 27000 + i) for i in range(12))
+    (alice,) = clients(1, names=["Alice"], via_menu=True,
+                       config_extra="recent_servers = [%s]\n" % recents)
+    expect(alice).to_be_in_state("menu")
+    st = alice.state()
+    assert st["menu"] == {"recent_shown": 3, "recent_total": 12}, st["menu"]
+
 
 
 def test_main_menu_connect_and_world_screenshots(server, clients, artifact_dir):
@@ -36,6 +48,18 @@ def test_main_menu_connect_and_world_screenshots(server, clients, artifact_dir):
     world = stats(world_shot["path"])
     assert world["distinct_colors"] >= 40, "the in-game screenshot looks blank: %r" % world
     assert world["mean_rgb"] != menu["mean_rgb"], "the screenshot did not change after joining"
+
+def test_menu_name_override_is_session_only(server, clients):
+    """Settings is the only writer of client.toml's player_name: a name handed to the menu
+    (what --name / menu.connect{name} do) is used for this connection but never saved."""
+    (alice,) = clients(1, names=["Alice"], via_menu=True)
+    alice.menu_connect("127.0.0.1", server.port, name="Bob")
+    expect(alice).to_be_in_state("playing", timeout=60)
+    assert server.player("Bob") is not None
+    conf = alice.config_path.read_text()
+    assert re.search(r"""player_name = ['"]Alice['"]""", conf), conf
+    assert "127.0.0.1:%d" % server.port in conf, conf  # the join did save the config (recent servers)
+
 
 
 def test_connecting_panel_fits_on_screen(server, clients, artifact_dir):
@@ -62,13 +86,15 @@ def test_connecting_panel_fits_on_screen(server, clients, artifact_dir):
         pytest.skip("never caught the client mid-connect (handshake finished too fast)")
 
     width, height, channels, rows = read_png(shot["path"])
-    bg = (18, 18, 22)  # Color{18,18,22,255}, src/render/window.cpp's ClearBackground
-    last_row = rows[-1]
-    non_bg = sum(1 for i in range(0, width * channels, channels)
-                 if tuple(last_row[i:i + 3]) != bg)
-    assert non_bg == 0, (
+    # The backdrop is the 16px dirt texture drawn 4x (src/render/main_menu.cpp draw_backdrop), so it
+    # repeats every 64 rows. Unclipped, the last row is pure backdrop and equals the row 64 above
+    # it (which is below the centred panel); a panel bleeding into it would differ.
+    last_row, ref_row = rows[-1], rows[-1 - 64]
+    differing = sum(1 for i in range(0, width * channels, channels)
+                    if tuple(last_row[i:i + 3]) != tuple(ref_row[i:i + 3]))
+    assert differing == 0, (
         "the connecting panel's bottom row bled into the window's last pixel row "
-        "(clipped off-screen): %d non-background pixels" % non_bg)
+        "(clipped off-screen): %d pixels differ from the backdrop" % differing)
 
 
 @pytest.mark.parametrize("windowed", [False, True], ids=["headless", "windowed"])
@@ -91,16 +117,16 @@ def test_screenshot_needs_a_window(server, clients, artifact_dir):
     assert e.value.code == "unsupported"
 
 
-def test_singleplayer_says_on_the_menu_when_the_pack_needs_another_engine(make_clients, tmp_path, artifact_dir):
-    # pack.toml's engine_version_req admits no current build: singleplayer must not start (it used to
+def test_loopback_says_on_the_menu_when_the_pack_needs_another_engine(make_clients, tmp_path, artifact_dir):
+    # pack.toml's engine_version_req admits no current build: loopback must not start (it used to
     # run the base block set and only say why on stderr); the error screen names the requirement.
     pack = make_pack(REPO, tmp_path, {"pack.toml": 'name = "too_new"\nversion = "1.0.0"\nengine_version_req = ">=99.0.0"\n'})
     (solo,) = make_clients(None)(1, names=["Solo"], via_menu=True,
                                  extra_args=["--content-pack", str(pack), "--world-dir", str(tmp_path / "world")])
     expect(solo).to_be_in_state("menu")
-    solo.menu_singleplayer()
+    solo.menu_loopback()
     expect(solo).to_be_in_state("error", timeout=30)
     message = solo.state()["error_message"]
-    assert "singleplayer" in message and ">=99.0.0" in message, message
-    shot = solo.screenshot(artifact_dir / "singleplayer_engine_req.png")
+    assert "loopback" in message and ">=99.0.0" in message, message
+    shot = solo.screenshot(artifact_dir / "loopback_engine_req.png")
     assert stats(shot["path"])["distinct_colors"] >= 4

@@ -11,5 +11,8 @@
 #define __rdtsc() ((unsigned __int64)_ReadStatusReg(ARM64_CNTVCT))
 #endif
 
+// zpl calls aligned_alloc() without including <stdlib.h> on POSIX.
+#include <stdlib.h>
+
 #define LIBRG_IMPL
 #include <librg.h>

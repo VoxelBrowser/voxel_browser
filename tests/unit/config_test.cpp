@@ -181,6 +181,25 @@ TEST_CASE("client CLI overrides") {
 	ClientConfig cfg;
 	const auto args = make_args({ "cl", "--name", "Zed", "--fov", "100" });
 	apply_cli_overrides(cfg, args);
-	CHECK(cfg.player_name == "Zed");
+	// --name is a session-only override that ClientApp applies itself; it must never land in the
+	// config that Settings / the join path write back to client.toml (Phase 12.4).
+	CHECK(cfg.player_name == "Player");
 	CHECK(cfg.fov == doctest::Approx(100.0));
+}
+
+TEST_CASE("recent servers: most recent first, de-duplicated, capped at kMaxServerHistory") {
+	ClientConfig cfg;
+	record_recent_server(cfg, "a:1");
+	record_recent_server(cfg, "b:2");
+	record_recent_server(cfg, "a:1"); // moves to the front instead of duplicating
+	REQUIRE(cfg.recent_servers.size() == 2);
+	CHECK(cfg.recent_servers[0] == "a:1");
+	CHECK(cfg.recent_servers[1] == "b:2");
+
+	for (std::size_t i = 0; i < vb::core::kMaxServerHistory + 20; ++i) {
+		record_recent_server(cfg, "host" + std::to_string(i) + ":27015");
+	}
+	CHECK(cfg.recent_servers.size() == vb::core::kMaxServerHistory);
+	CHECK(cfg.recent_servers.front() == "host" + std::to_string(vb::core::kMaxServerHistory + 19) + ":27015");
+	CHECK(vb::core::kMaxServerHistory == 50);
 }

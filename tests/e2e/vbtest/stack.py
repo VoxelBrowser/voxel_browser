@@ -74,7 +74,7 @@ class ClientFactory:
         self.allow_remote, self.skip, self._count = allow_remote, skip, 0
 
     def __call__(self, n=1, names=None, host="127.0.0.1", port=None, join=True, render_distance=2, windowed=False,
-                 via_menu=False, tcp=False, extra_args=(), home=None, singleplayer=None):
+                 via_menu=False, tcp=False, extra_args=(), home=None, singleplayer=None, config_extra=""):
         """windowed=True opens a real window (needs a display, e.g. `xvfb-run -a pytest ...`);
         via_menu=True starts on the main menu instead of connecting (drive it with `menu_connect`).
         tcp=True drives the client over `--automation tcp` (loopback, token) instead of its stdio.
@@ -83,7 +83,8 @@ class ClientFactory:
         spawns: a second client started with the same `home` is "the same install", e.g. one that
         finds yesterday's refresh token.
         singleplayer="<pack dir>" runs the integrated server on that content pack instead of
-        connecting to `server` (which may then be None); join/expect work the same."""
+        connecting to `server` (which may then be None); join/expect work the same.
+        config_extra is raw TOML appended to each client's client.toml (e.g. `recent_servers`)."""
         check_host(host, self.allow_remote)  # §7.4: test bots never go near a real server
         if via_menu:
             windowed, join = True, False  # the menu only exists in a window
@@ -117,7 +118,8 @@ class ClientFactory:
                     # apply_cli_overrides(ClientConfig&, ...), so asking for
                     # anything smaller here would just be a lie about what
                     # the client actually opens at.
-                    ('window_width = 720\nwindow_height = 360\nvsync = false\n' if windowed else ""))
+                    ('window_width = 720\nwindow_height = 360\nvsync = false\n' if windowed else "") +
+                    config_extra)
             env = dict(os.environ, HOME=str(home_dir), XDG_CACHE_HOME=str(cache), LOCALAPPDATA=str(cache),
                        # saved sign-ins live under the config dir: never the real one, whatever the runner sets
                        XDG_CONFIG_HOME=str(home_dir / "config"), APPDATA=str(home_dir / "config"),
@@ -127,7 +129,7 @@ class ClientFactory:
                        VB_CONNECT_TIMEOUT_SECONDS=str(int(10 * timeout_scale())))
             argv = [str(self.client_bin)] + ([] if windowed else ["--headless"])
             if singleplayer:
-                argv += ["--singleplayer", "--content-pack", str(singleplayer), "--world-dir",
+                argv += ["--loopback", "--content-pack", str(singleplayer), "--world-dir",
                          str(home_dir / "world")]
             elif not via_menu:  # --server connects straight away; without it a windowed client opens on the menu
                 argv += ["--server", host, "--port", str(port or self.server.port)]
@@ -136,6 +138,7 @@ class ClientFactory:
             c = Client("client-" + name, argv, self.artifact_dir, env=env, tcp=tcp)
             c.player_name = name
             c.cache_dir = cache
+            c.config_path = conf
             self.procs.append(c)
             made.append(c)
         for c in made:

@@ -10,9 +10,10 @@ target_sources(vb_core PRIVATE
 if(VB_WITH_REPLICATION)
   # librg is vendored C99; its LIBRG_IMPL translation unit must not see our
   # -Werror flags -- same isolation pattern as vb_raygui_impl
-  # (src/render/CMakeLists.txt).
+  # (src/render/CMakeLists.txt). Built as C11, not C99: zpl calls aligned_alloc(),
+  # which newer glibc only declares in C11 mode.
   add_library(vb_librg_impl STATIC librg_impl.c)
   target_link_libraries(vb_librg_impl PUBLIC vb_librg)
-  set_target_properties(vb_librg_impl PROPERTIES C_STANDARD 99)
+  set_target_properties(vb_librg_impl PROPERTIES C_STANDARD 11)
   target_link_libraries(vb_core PRIVATE vb_librg_impl)
 endif()

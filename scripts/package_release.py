@@ -123,6 +123,9 @@ def main():
                 for src, arc in tree_files(ROOT, "sdk", {".lua", ".txt", ".json", ".md"})]
     entries += [(str(arc.as_posix()), src, False)
                 for src, arc in tree_files(ROOT, "docs", {".md", ".txt"})]
+    # The menu fonts are baked into the client; their OFL texts ship with it.
+    entries += [("licenses/" + src.name, src, False)
+                for src in sorted((ROOT / "src/render/resources").glob("*.txt"))]
     entries.append(("BUILD_INFO.toml",
                     build_info(args.version, args.platform, args.build_type).encode(), False))
 

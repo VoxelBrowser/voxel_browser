@@ -1,7 +1,7 @@
 -- kitchen_sink:status -- opened by keybinds.lua's player_input handler via
 -- `player:open_ui("kitchen_sink:status", {})` (Phase 6.2/6.3, spec §10.4).
 -- Loaded client-side only, over Asset Sync for a real connection or straight
--- off disk for --singleplayer (docs/lua-api.md's "Client wiring" note) --
+-- off disk for --loopback (docs/lua-api.md's "Client wiring" note) --
 -- never by src/script/pack_loader.cpp, which only ever sees this pack's
 -- server-side files (blocks/entities/biomes/root *.lua/init.lua).
 --

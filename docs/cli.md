@@ -141,7 +141,7 @@ options:
 
 examples:
   vb launch --connect localhost:7777    # join a local server
-  vb launch -- --singleplayer    # start singleplayer directly
+  vb launch -- --loopback    # start the in-process loopback diagnostic
 ```
 
 ## `vb link`

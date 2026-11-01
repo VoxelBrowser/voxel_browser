@@ -32,7 +32,8 @@ public:
 			vb::render::Window &window, const std::string &cli_server, int cli_port,
 			int configured_view_distance, std::optional<bool> auto_connect,
 			bool render = true,
-			std::optional<std::filesystem::path> auth_token_file = std::nullopt);
+			std::optional<std::filesystem::path> auth_token_file = std::nullopt,
+			std::string name_override = {});
 
 	// Headless only (render == false): blocks until the pending connection
 	// joined or failed -- same fixed-tick / 10s-wall-clock waits the old
@@ -117,21 +118,27 @@ public:
 	bool menu_active() const { return state == AppState::kMenu; }
 	// What the error screen says (app_state "error").
 	const std::string &error_text() const { return error_message; }
+	// Main-screen recent-server rows drawn last frame, and how many servers the history holds.
+	int menu_recent_shown() const { return menu.recent_shown(); }
+	std::size_t recent_server_count() const { return config.recent_servers.size(); }
 	// The name this connection used (what the menu holds), not config.player_name, which only
 	// follows it after a menu-driven connect.
-	const std::string &player_name() const { return menu.player_name(); }
-	void menu_set_name(std::string_view name) {
-		const std::string address = menu.address(); // prefill() reassigns it: pass a copy
-		menu.prefill(address, menu.port(), name);
-	}
+	const std::string &player_name() const { return session_name_; }
+	// Automation's name commands are session overrides: they change the name the next connection
+	// uses (an empty `name` keeps the current one) and never reach client.toml.
+	void menu_set_name(std::string_view name) { session_name_ = std::string(name); }
 	void menu_connect(std::string_view host, int port, std::string_view name) {
-		menu.prefill(host, port, name);
+		if (!name.empty()) {
+			session_name_ = std::string(name);
+		}
+		menu.prefill(host, port);
 		pending_menu = vb::render::MainMenu::MainResult{ .connect = true };
 	}
 	void menu_singleplayer(std::string_view name) {
-		const std::string address = menu.address();
-		menu.prefill(address, menu.port(), name);
-		pending_menu = vb::render::MainMenu::MainResult{ .singleplayer = true };
+		if (!name.empty()) {
+			session_name_ = std::string(name);
+		}
+		pending_singleplayer = true;
 	}
 	// The engine-drawn sign-in screen, same idea: "trust" (Continue on the first-use
 	// prompt), "browser" (Sign in with your browser / with Google) or "cancel". The next
@@ -163,6 +170,9 @@ private:
 	// menu, GL resources or draw calls (window may be a headless Window).
 	const bool render;
 	vb::render::MainMenu menu;
+	// The name connections use: client.toml's player_name (Settings is its only writer) unless
+	// `--name` / the automation name commands override it for this run.
+	std::string session_name_;
 	AppState state = AppState::kMenu;
 	std::string error_message;
 	// The view distance actually in effect this connection -- starts at
@@ -294,6 +304,7 @@ private:
 	bool headless_ui_eval = false;
 	std::vector<vb::script::Widget> hud_widget_cache;
 	std::optional<vb::render::MainMenu::MainResult> pending_menu;
+	bool pending_singleplayer = false; // menu.singleplayer: the main screen has no such button any more
 	std::optional<vb::render::MainMenu::SigningInResult> pending_sign_in;
 	Observer *observer = nullptr;
 	std::string screenshot_path_;

@@ -231,7 +231,7 @@ keeps automation clear of the threading gotchas in `state/gotchas.md`
 | Group | Command | Notes |
 |---|---|---|
 | meta | `hello`, `step{frames}`, `quit` | `step` is manual clock only |
-| menu | `menu.set_name`, `menu.connect{host,port}`, `menu.singleplayer` | Injects `MenuResult` |
+| menu | `menu.set_name`, `menu.connect{host,port}`, `menu.loopback` (alias `menu.singleplayer`) | Injects `MenuResult` |
 | query | `state` | Returns one snapshot: `app_state`, `handshake`, `net_id`, `feet`, `yaw/pitch`, `health`, `hotbar`, `selected_slot`, `chat[]`, `remote_entities[{net_id,name,kind,pos}]`, `ui{name,widgets[{id,type,text,items,list_index}]}`, `hud{widgets}`, `chunks_loaded`, `target_block` |
 | query | `block_at{pos}` | From `ClientChunkStore` (the client's view) |
 | input | `key.hold{key,frames}`, `key.press{key}`, `mouse.hold{button,frames}`, `look{yaw,pitch}` / `look_at{pos}`, `type{text}` | Feeds `SyntheticInput`; key names map to logical bindings (`forward`, `jump`, `primary`) **or** raw raylib keys |
@@ -281,7 +281,7 @@ global `FakePacketLag/Jitter/Loss/Reorder/Dup_Send` settings (`GnsTransport::set
 under bad conditions, which could previously only be checked by hand. **Implemented in E5.**
 Each side only delays what it *sends*, so tests give both binaries the spec. Two changes from
 the original sketch: GNS has real jitter settings (no need to approximate), and there is **no
-`LoopbackTransport` queue**: singleplayer is refused, since it has no network to degrade.
+`LoopbackTransport` queue**: `--loopback` is refused, since it has no network to degrade.
 `--net-sim` is development-only too and sits behind the same flag (a production build
 refuses it, checked by CTest and the release legs).
 
@@ -720,16 +720,21 @@ Files that currently point here: `ARCHITECTURE_SPEC.md`,
    fd 1 for protocol frames, pointing fd 1 itself at stderr.
 9. **Windowed automation (E5).** The client can now run `--automation` in a real window
    (under `xvfb-run`, software GL). raygui can't be clicked by script, so menu commands
-   inject the click's *result* and fill the menu's fields.
+   inject the click's *result* and fill the menu's fields. Since Phase 12 the main screen has one
+   address field, no player-name field and no Singleplayer/Quit buttons: `menu.set_name` and
+   `menu.connect{name}` change a session-only name (never saved), `menu.loopback` /
+   `menu.singleplayer` still start the diagnostic, and `state.menu {recent_shown, recent_total}`
+   reports what the main screen drew. Menu screenshots now have the dirt backdrop, so pixel
+   checks must not assume the flat (18,18,22) clear colour (the backdrop repeats every 64 rows).
 10. **`World::set_block` creates chunks on demand and returns "changed", not
    "chunk exists" (found in E3).** The server `set_block`/`fill` therefore check
    `has_chunk` first and refuse edits outside loaded chunks, instead of
    silently creating empty ones. Tests must build near a player.
-11. **Singleplayer never installs the pack keybind registry (found in E3).**
+11. **Loopback (`--loopback`) never installs the pack keybind registry (found in E3).**
    `make_singleplayer_host` calls `install_join_veto` and
    `install_entity_kind_registry` but not `install_keybind_registry` (only the
    dedicated server does), so pack keybinds (`base:inventory`, `base:pause`)
-   don't reach a `--singleplayer` client: pressing the inventory key opens
+   don't reach a `--loopback` client: pressing the inventory key opens
    nothing. Pre-existing and left alone; UI tests must use a dedicated server.
 12. **Headless clients skip modal-UI/HUD evaluation** (it only ran as a side
    effect of drawing). `ClientApp::set_headless_ui_eval()` turns it on; the
