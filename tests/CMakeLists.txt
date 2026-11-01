@@ -205,6 +205,20 @@ if(NOT VB_WITH_AUTOMATION)
   endif()
 endif()
 
+# Real-UDP capacity benchmark smoke (docs/loadtest.md): a few vb_loadtest bots
+# against a real server, so the tool keeps building and working. Only checks
+# that every bot joins and the server reports tick stats -- never tick speed,
+# which a sanitizer build can't meet. Linux only; needs tomllib (Python 3.11+).
+if(VB_WITH_NET AND VB_BUILD_SERVER AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_package(Python3 3.11 COMPONENTS Interpreter)
+  if(Python3_FOUND)
+    add_test(NAME loadtest_smoke
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/loadtest.py --smoke
+              --build ${CMAKE_BINARY_DIR} --steps 4 --duration 12 --port 27199)
+    set_tests_properties(loadtest_smoke PROPERTIES LABELS loadtest TIMEOUT 180)
+  endif()
+endif()
+
 # End-to-end multiplayer tests (docs/e2e-automation.md §8): real voxel_browser +
 # voxel_browser_server processes driven over the automation channel by pytest
 # (tests/e2e/). Registered only in a build that can run one: automation (the driver),
