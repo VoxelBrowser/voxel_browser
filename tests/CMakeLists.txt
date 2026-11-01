@@ -18,6 +18,7 @@ add_executable(vb_tests
   unit/block_damage_test.cpp
   unit/block_registry_test.cpp
   unit/chunk_codec_test.cpp
+  unit/capacity_test.cpp
   unit/cli_test.cpp
   unit/config_test.cpp
   unit/server_address_test.cpp
@@ -201,6 +202,20 @@ if(NOT VB_WITH_AUTOMATION)
     add_test(NAME client_rejects_auth_token_file
       COMMAND voxel_browser --auth-token-file ${CMAKE_BINARY_DIR}/never.txt --headless --frames 1)
     set_tests_properties(client_rejects_auth_token_file PROPERTIES WILL_FAIL TRUE)
+  endif()
+endif()
+
+# Real-UDP capacity benchmark smoke (docs/loadtest.md): a few vb_loadtest bots
+# against a real server, so the tool keeps building and working. Only checks
+# that every bot joins and the server reports tick stats -- never tick speed,
+# which a sanitizer build can't meet. Linux only; needs tomllib (Python 3.11+).
+if(VB_WITH_NET AND VB_BUILD_SERVER AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  find_package(Python3 3.11 COMPONENTS Interpreter)
+  if(Python3_FOUND)
+    add_test(NAME loadtest_smoke
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/loadtest.py --smoke
+              --build ${CMAKE_BINARY_DIR} --steps 4 --duration 12 --port 27199)
+    set_tests_properties(loadtest_smoke PROPERTIES LABELS loadtest TIMEOUT 180)
   endif()
 endif()
 

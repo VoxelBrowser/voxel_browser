@@ -19,6 +19,7 @@
 - [Wire protocol](protocol.md): normative message formats
 - [Automation protocol](automation-protocol.md): JSON-lines driver for tests
 - [End-to-end automation](e2e-automation.md): the multiplayer test harness
+- [Server capacity benchmark](loadtest.md): `vb_loadtest` bots over real UDP, results
 
 ## Optional
 - [Replication](replication.md): interest management design

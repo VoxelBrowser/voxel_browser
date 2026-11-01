@@ -90,7 +90,9 @@ the `content/base` HUD (health/hunger bars, hotbar, live inventory screen,
 crosshair), a dev-only end-to-end automation harness (see below), the
 structure editor with rule-based tree/rock placement (see below), and optional
 sign-in through an identity provider for packs that ship an `auth.lua`
-(`docs/auth.md`).
+(`docs/auth.md`), and server capacity testing: a `max_players` stress test
+plus a real-UDP bot benchmark (see "How many players can a server take?"
+below).
 
 Known gaps worth knowing about before diving in are listed in
 `REMAINING_TASKS.md` and `STATE.md`.
@@ -245,6 +247,7 @@ Binaries land in `build/`:
 | `voxel_browser`          | the client ("the browser")                        |
 | `voxel_browser_server`   | the authoritative, headless server                |
 | `vb_structure_editor`    | the structure editor (needs the client build and `VB_WITH_LUA`) |
+| `vb_loadtest`            | real-UDP capacity benchmark: N bot players against a server (useful with `VB_WITH_NET`; see below) |
 
 ```bash
 ./build/voxel_browser_server --config server.toml   # start a server
@@ -297,7 +300,7 @@ are saved on exit; pass `--world-dir <dir>` to choose where.
 | Option                  | Default | Effect                                              |
 | ----------------------- | ------- | -------------------------------------------------- |
 | `VB_BUILD_CLIENT`       | `ON`    | build `voxel_browser` + `vb_render` (needs raylib)  |
-| `VB_BUILD_SERVER`       | `ON`    | build `voxel_browser_server`                        |
+| `VB_BUILD_SERVER`       | `ON`    | build `voxel_browser_server` and `vb_loadtest`      |
 | `VB_BUILD_CLI`          | `ON`    | build the developer CLI `vb`                        |
 | `VB_BUILD_EDITOR`       | `ON` with the client and `VB_WITH_LUA` (not `VB_HEADLESS`) | build the structure editor `vb_structure_editor` |
 | `VB_BUILD_TESTS`        | `ON`    | build `vb_tests` and register CTest tests           |
@@ -330,10 +333,48 @@ comment in `cmake/Dependencies.cmake`):
 `docs/e2e-automation.md`, `docs/automation-protocol.md` and
 `tests/e2e/README.md`.
 
+### How many players can a server take?
+
+The cap is `max_players` in `server.toml` (or `--max-players <n>`). It
+defaults to **16**, and the engine sets no hard upper limit. Joins past the
+cap are refused with "server is full", including when many clients connect at
+the same moment. `tests/unit/capacity_test.cpp` checks this.
+
+How many players a server can actually carry depends on its hardware and
+network. Measured on a 4-vCPU machine, with the server and the bots sharing
+the same cores (full tables in `docs/loadtest.md`):
+
+| Players | Avg tick, walking (budget 50 ms) | Avg tick, all at spawn | Server upload, all at spawn |
+| ------: | ------------------------------: | ---------------------: | --------------------------: |
+| 32      | 17 ms                           | 5.5 ms                 | ~1.1 MiB/s                  |
+| 64      | 28 ms                           | 12 ms                  | ~4.2 MiB/s                  |
+| 128     | some joins time out             | 24.5 ms                | ~23 MiB/s (~190 Mbit/s)     |
+
+Up to about 32 players is comfortable. 64 is fine on CPU but needs roughly
+35 Mbit/s of upload. Upload bandwidth runs out before CPU, because each
+player receives updates about every nearby player, so traffic grows with the
+square of the player count when players are close together.
+
+To measure your own server, use `vb_loadtest`, which connects N bot players
+over real UDP, and `scripts/loadtest.py`, which raises N step by step and
+reports where the server stops keeping its tick rate. Both need
+`-DVB_WITH_NET=ON`:
+
+```bash
+python3 scripts/loadtest.py --build build --steps 8,16,32,64,128
+./build/vb_loadtest --host <server> --port 27015 --bots 50 --duration 60   # load a server that's already running
+```
+
+`ctest -L loadtest` runs a 4-bot smoke version of the benchmark. The status
+file a server writes with `--status-file` also reports how long each tick
+takes to run (`tick_ms_avg`, `tick_ms_max`), which is handy for watching a
+live server.
+
 ## 📚 More docs
 
 `ARCHITECTURE_SPEC.md` (design) · `REMAINING_TASKS.md` (backlog) · `STATE.md`
 (gotchas) · `CONTRIBUTING.md` · `docs/lua-api.md` (scripting API) ·
 `docs/lua-reference/README.md` (Lua quick reference) · `docs/cli.md` (`vb` commands) · `docs/llms.txt` (index for agents) ·
 `docs/protocol.md` · `docs/auth.md` (player sign-in) · `docs/structure-editor.md` (structures and their editor) ·
+`docs/loadtest.md` (server capacity benchmark and results) ·
 `architecture_spec/content-pack-format.md`.

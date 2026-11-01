@@ -24,6 +24,7 @@ add_subdirectory(editor)
 
 if(VB_BUILD_SERVER)
   add_subdirectory(server)
+  add_subdirectory(loadtest)
 endif()
 
 if(VB_BUILD_CLI)

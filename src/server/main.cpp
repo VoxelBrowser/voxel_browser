@@ -731,6 +731,13 @@ int main(int argc, char **argv) {
 	auto window_start = status_started;
 	long long window_ticks = 0;
 	double achieved_tick_rate = 0.0;
+	// Wall time each tick spends working (not sleeping), over the status
+	// window: how close the server is to its tick budget. vb_loadtest's
+	// driver (scripts/loadtest.py) reads these.
+	double window_work_ms_sum = 0.0;
+	double window_work_ms_max = 0.0;
+	double tick_ms_avg = 0.0;
+	double tick_ms_max = 0.0;
 	const auto emit_status = [&](bool running) {
 		if (status_file.empty()) {
 			return;
@@ -739,9 +746,13 @@ int main(int argc, char **argv) {
 		const double window = std::chrono::duration<double>(now - window_start).count();
 		if (window >= 1.0 && window_ticks > 0) {
 			achieved_tick_rate = static_cast<double>(window_ticks) / window;
+			tick_ms_avg = window_work_ms_sum / static_cast<double>(window_ticks);
+			tick_ms_max = window_work_ms_max;
 		}
 		window_start = now;
 		window_ticks = 0;
+		window_work_ms_sum = 0.0;
+		window_work_ms_max = 0.0;
 		std::ostringstream os;
 		os << "running = " << (running ? "true" : "false") << "\n"
 		   << "updated = "
@@ -755,6 +766,8 @@ int main(int argc, char **argv) {
 		   << "target_tick_rate = " << config.tick_rate << "\n"
 		   << "tick_rate = " << std::fixed << std::setprecision(1) << achieved_tick_rate
 		   << std::defaultfloat << "\n"
+		   << "tick_ms_avg = " << std::fixed << std::setprecision(3) << tick_ms_avg << "\n"
+		   << "tick_ms_max = " << tick_ms_max << std::defaultfloat << "\n"
 		   << "max_players = " << config.max_players << "\n"
 		   << "seed = \"" << seed << "\"\n" // string: u64 can exceed TOML's signed 64-bit integers
 		   << "motd = " << toml_string(config.motd) << "\n"
@@ -767,9 +780,11 @@ int main(int argc, char **argv) {
 		os << "]\n";
 		write_status_file(status_file, os.str());
 	};
-	const long long status_ticks = status_file.empty()
-			? 0
-			: std::max<long long>(1, std::llround(kStatusIntervalSeconds * config.tick_rate));
+	// Wall-clock cadence, not every N ticks: a server that has fallen behind
+	// its tick rate must still report, since that's exactly when someone is
+	// reading this (scripts/loadtest.py under a sanitizer build, or an
+	// overloaded host).
+	const auto status_interval = std::chrono::duration<double>(kStatusIntervalSeconds);
 	emit_status(true);
 
 	// Same once-a-second cadence as manifest_check_ticks: a stat() per tick
@@ -785,6 +800,7 @@ int main(int argc, char **argv) {
 #endif
 
 	while (!g_stop.load(std::memory_order_relaxed)) {
+		const auto tick_work_start = std::chrono::steady_clock::now();
 		++tick;
 		session.tick(tick_dt_seconds);
 		if (stop_file_check_ticks > 0 && tick % stop_file_check_ticks == 0) {
@@ -821,7 +837,7 @@ int main(int argc, char **argv) {
 			std::cout << "server: a player left (" << left.reason << ")\n";
 		}
 
-		if (status_ticks > 0 && tick % status_ticks == 0) {
+		if (!status_file.empty() && std::chrono::steady_clock::now() - window_start >= status_interval) {
 			emit_status(true);
 		}
 		if (autosave_ticks > 0 && tick % autosave_ticks == 0) {
@@ -839,6 +855,14 @@ int main(int argc, char **argv) {
 
 		if (max_ticks > 0 && tick >= max_ticks) {
 			break;
+		}
+
+		{
+			const double work_ms = std::chrono::duration<double, std::milli>(
+					std::chrono::steady_clock::now() - tick_work_start)
+										   .count();
+			window_work_ms_sum += work_ms;
+			window_work_ms_max = std::max(window_work_ms_max, work_ms);
 		}
 
 		next += tick_dt;
