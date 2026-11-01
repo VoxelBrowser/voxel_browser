@@ -780,9 +780,11 @@ int main(int argc, char **argv) {
 		os << "]\n";
 		write_status_file(status_file, os.str());
 	};
-	const long long status_ticks = status_file.empty()
-			? 0
-			: std::max<long long>(1, std::llround(kStatusIntervalSeconds * config.tick_rate));
+	// Wall-clock cadence, not every N ticks: a server that has fallen behind
+	// its tick rate must still report, since that's exactly when someone is
+	// reading this (scripts/loadtest.py under a sanitizer build, or an
+	// overloaded host).
+	const auto status_interval = std::chrono::duration<double>(kStatusIntervalSeconds);
 	emit_status(true);
 
 	// Same once-a-second cadence as manifest_check_ticks: a stat() per tick
@@ -835,7 +837,7 @@ int main(int argc, char **argv) {
 			std::cout << "server: a player left (" << left.reason << ")\n";
 		}
 
-		if (status_ticks > 0 && tick % status_ticks == 0) {
+		if (!status_file.empty() && std::chrono::steady_clock::now() - window_start >= status_interval) {
 			emit_status(true);
 		}
 		if (autosave_ticks > 0 && tick % autosave_ticks == 0) {
