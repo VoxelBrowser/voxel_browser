@@ -330,6 +330,13 @@ comment in `cmake/Dependencies.cmake`):
 `docs/e2e-automation.md`, `docs/automation-protocol.md` and
 `tests/e2e/README.md`.
 
+### Server capacity benchmark
+
+`vb_loadtest` connects N bot players to a real server over UDP, and
+`scripts/loadtest.py` steps N up to find where the server stops keeping its
+tick rate (`-DVB_WITH_NET=ON`; `python3 scripts/loadtest.py --build build`).
+Results and how to read them: `docs/loadtest.md`.
+
 ## 📚 More docs
 
 `ARCHITECTURE_SPEC.md` (design) · `REMAINING_TASKS.md` (backlog) · `STATE.md`

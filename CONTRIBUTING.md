@@ -24,6 +24,7 @@ The engine is split into two static libraries plus three executables
 | `voxel_browser_server`   | The authoritative, headless server executable — `src/server/main.cpp`. |
 | `vb_structure_editor`    | The structure editor — `src/editor/app/` (optional, see the `editor` row below). |
 | `vb_tests`               | Unit + integration tests (doctest) — `tests/unit/*.cpp`.       |
+| `vb_loadtest`            | Real-UDP capacity benchmark: N bot players against a running server — `src/loadtest/`, driven by `scripts/loadtest.py` (`docs/loadtest.md`). |
 
 `vb_core` is assembled from per-module subdirectories, each with its own
 `src/<module>/CMakeLists.txt` and mirrored `inc/vb/<module>/` headers:

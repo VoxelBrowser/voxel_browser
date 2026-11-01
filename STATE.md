@@ -70,8 +70,9 @@ content-only (e.g. the user explicitly asks for a content-pack feature).
   fill to `max_players`, burst-join past it, full-server tick budget. It
   caught a real overfill bug — the cap counted only `kPlaying` conns, so 24
   simultaneous joins all got into a 16-slot server; `ServerSession` now counts
-  every conn from `kVerifyingAuth` through `kPlaying`. Loopback only; a
-  real-UDP N-bot benchmark is still open (`remaining_tasks/cross_cutting.md`).
+  every conn from `kVerifyingAuth` through `kPlaying`. Real-UDP side:
+  `vb_loadtest` + `scripts/loadtest.py`, results in `docs/loadtest.md`
+  (upload bandwidth, O(N²) when crowded, is the first real limit).
 - **Main menu redesign (Phase 12) landed** 2026-10-31 (12.1–12.7): design
   `architecture_spec/rendering.md` §11.6, detail `remaining_tasks/phase12.md`.
   Traps: Settings is the only writer of `player_name` (`ClientApp::session_name_`
