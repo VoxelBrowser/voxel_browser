@@ -123,8 +123,22 @@ ServerSession::ServerSession(Transport &transport, HandshakeServerConfig config,
 									host_(std::move(host)) {
 	// Session owns the authoritative player count and net-id allocation; wrap
 	// whatever the caller passed so their auth/spawn hooks still run.
+	// The max_players gate runs at the Auth step, so it must count every
+	// connection already holding a slot -- past Auth but still verifying,
+	// syncing assets or awaiting Ready -- not just the fully-joined ones.
+	// Counting only `playing_` let a burst of simultaneous joins all pass the
+	// gate before any of them reached kPlaying (capacity_test.cpp).
 	host_.current_player_count = [this] {
-		return static_cast<std::uint32_t>(playing_);
+		std::uint32_t holding_slot = 0;
+		for (const auto &[c, other] : conns_) {
+			(void)c;
+			const auto s = other.handshake.state();
+			if (s >= ServerHandshakeState::kVerifyingAuth &&
+					s <= ServerHandshakeState::kPlaying) {
+				++holding_slot;
+			}
+		}
+		return holding_slot;
 	};
 	// External auth: two different people may both be "alex"; the later one
 	// becomes "alex#2" (auth.md §5.5). Same-subject sessions are skipped, since
