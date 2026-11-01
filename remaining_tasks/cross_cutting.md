@@ -277,6 +277,14 @@
       rather than a suite-doubling one. Verified: full `vb_tests` 413/413
       green, clean `-Werror` build of `vb_tests`/`voxel_browser`/
       `voxel_browser_server`.
+- [x] Server capacity test — landed 2026-11-01 as `tests/unit/capacity_test.cpp`
+      (loopback, in `vb_tests`): sequential fill to `max_players` + refusal +
+      slot reuse, a `max_players + 8` simultaneous burst that must never
+      overfill (it did: fixed in `ServerSession`'s `current_player_count`),
+      and a 16-player median tick < 50 ms gate (measured ~0.12 ms).
+- [ ] Real-UDP capacity benchmark: spawn N automation clients against a
+      running `voxel_browser_server` and report tick time / bandwidth per
+      client as N grows (needs `VB_WITH_NET` + `VB_WITH_AUTOMATION`).
 - [x] Perf budget checks: chunk mesh time, snapshot size — landed 2026-09-28
       as `tests/unit/perf_budget_test.cpp`, two budget-gate `TEST_CASE`s
       folded into the normal `vb_tests` run (no historical tracking, no
