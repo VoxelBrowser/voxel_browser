@@ -18,6 +18,7 @@ add_executable(vb_tests
   unit/block_damage_test.cpp
   unit/block_registry_test.cpp
   unit/chunk_codec_test.cpp
+  unit/capacity_test.cpp
   unit/cli_test.cpp
   unit/config_test.cpp
   unit/server_address_test.cpp
